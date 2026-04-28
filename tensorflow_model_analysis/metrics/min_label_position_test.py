@@ -30,6 +30,46 @@ from tensorflow_model_analysis.utils import test_util
 from tensorflow_model_analysis.utils import util as tfma_util
 
 
+class CheckMinLabelPositionResult(object):
+
+    def __init__(self, metric, label_key):
+        self._metric = metric
+        self._label_key = label_key
+
+    def __call__(self, got):
+        if len(got) != 1:
+            raise ValueError("Expected 1 result, got %s" % got)
+        got_slice_key, got_metrics = got[0]
+        if got_slice_key != ():
+            raise ValueError("Expected slice_key to be (), got %s" % got_slice_key)
+        key = metric_types.MetricKey(name="min_label_position", example_weighted=True)
+        if key not in got_metrics:
+            raise ValueError("Expected %s in got_metrics" % key)
+        if self._label_key == "custom_label":
+            # (1*1.0 + 3*2.0) / (1.0 + 2.0) = 2.333333
+            expected = 2.333333
+        else:
+            # (2*1.0 + 1*2.0 + 1*3.0) / (1.0 + 2.0 + 3.0) = 1.166666
+            expected = 1.166666
+        if not np.allclose(got_metrics[key], expected):
+            raise ValueError("Expected %s, got %s" % (expected, got_metrics[key]))
+
+
+class CheckMinLabelPositionNanResult(object):
+
+    def __call__(self, got):
+        if len(got) != 1:
+            raise ValueError("Expected 1 result, got %s" % got)
+        got_slice_key, got_metrics = got[0]
+        if got_slice_key != ():
+            raise ValueError("Expected slice_key to be (), got %s" % got_slice_key)
+        key = metric_types.MetricKey(name="min_label_position", example_weighted=True)
+        if key not in got_metrics:
+            raise ValueError("Expected %s in got_metrics" % key)
+        if not math.isnan(got_metrics[key]):
+            raise ValueError("Expected NaN, got %s" % got_metrics[key])
+
+
 class MinLabelPositionTest(
     test_util.TensorflowModelAnalysisTest, parameterized.TestCase
 ):
@@ -38,7 +78,7 @@ class MinLabelPositionTest(
             min_label_position.MinLabelPosition().computations()
 
     def testRaisesErrorWhenExampleWeightsDiffer(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(Exception, "if example_weight size > 0"):
             metric = min_label_position.MinLabelPosition().computations(
                 query_key="query", example_weighted=True
             )[0]
@@ -157,26 +197,9 @@ class MinLabelPositionTest(
 
             # pylint: enable=no-value-for-parameter
 
-            def check_result(got):
-                try:
-                    self.assertLen(got, 1)
-                    got_slice_key, got_metrics = got[0]
-                    self.assertEqual(got_slice_key, ())
-                    key = metric_types.MetricKey(
-                        name="min_label_position", example_weighted=True
-                    )
-                    self.assertIn(key, got_metrics)
-                    if label_key == "custom_label":
-                        # (1*1.0 + 3*2.0) / (1.0 + 2.0) = 2.333333
-                        self.assertAllClose(got_metrics[key], 2.333333)
-                    else:
-                        # (2*1.0 + 1*2.0 + 1*3.0) / (1.0 + 2.0 + 3.0) = 1.166666
-                        self.assertAllClose(got_metrics[key], 1.166666)
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
-            util.assert_that(result, check_result, label="result")
+            util.assert_that(
+                result, CheckMinLabelPositionResult(metric, label_key), label="result"
+            )
 
     def testMinLabelPositionWithNoWeightedExamples(self):
         metric = min_label_position.MinLabelPosition().computations(
@@ -202,21 +225,7 @@ class MinLabelPositionTest(
 
             # pylint: enable=no-value-for-parameter
 
-            def check_result(got):
-                try:
-                    self.assertLen(got, 1)
-                    got_slice_key, got_metrics = got[0]
-                    self.assertEqual(got_slice_key, ())
-                    key = metric_types.MetricKey(
-                        name="min_label_position", example_weighted=True
-                    )
-                    self.assertIn(key, got_metrics)
-                    self.assertTrue(math.isnan(got_metrics[key]))
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
-            util.assert_that(result, check_result, label="result")
+            util.assert_that(result, CheckMinLabelPositionNanResult(), label="result")
 
 
 if __name__ == "__main__":

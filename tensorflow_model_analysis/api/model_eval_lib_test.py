@@ -1383,8 +1383,6 @@ class EvaluateTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase
         self.assertEqual(1.0, got_buckets[1]["lowerThresholdInclusive"])
         self.assertEqual(2.0, got_buckets[-2]["upperThresholdExclusive"])
 
-    # PR 189: Remove the `expectedFailure` mark if the test passes
-    @unittest.expectedFailure
     def testLoadValidationResult(self):
         result = validation_result_pb2.ValidationResult(validation_ok=True)
         path = os.path.join(absltest.get_default_test_tmpdir(), "results.tfrecord")
@@ -1393,8 +1391,6 @@ class EvaluateTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase
         loaded_result = model_eval_lib.load_validation_result(path)
         self.assertTrue(loaded_result.validation_ok)
 
-    # PR 189: Remove the `expectedFailure` mark if the test passes
-    @unittest.expectedFailure
     def testLoadValidationResultDir(self):
         result = validation_result_pb2.ValidationResult(validation_ok=True)
         path = os.path.join(
@@ -1405,8 +1401,6 @@ class EvaluateTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase
         loaded_result = model_eval_lib.load_validation_result(os.path.dirname(path))
         self.assertTrue(loaded_result.validation_ok)
 
-    # PR 189: Remove the `expectedFailure` mark if the test passes
-    @unittest.expectedFailure
     def testLoadValidationResultEmptyFile(self):
         path = os.path.join(
             absltest.get_default_test_tmpdir(), constants.VALIDATIONS_KEY
@@ -1538,15 +1532,16 @@ class EvaluateTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase
         ]
         serialized_examples = [example.SerializeToString() for example in examples]
         expected_num_bytes = sum([len(se) for se in serialized_examples])
-        with beam.Pipeline() as p:
-            _ = (
-                p
-                | beam.Create(serialized_examples)
-                | "InputsToExtracts" >> model_eval_lib.InputsToExtracts()
-                | "ExtractAndEvaluate"
-                >> model_eval_lib.ExtractAndEvaluate(extractors=[], evaluators=[])
-            )
+        p = beam.Pipeline()
+        _ = (
+            p
+            | beam.Create(serialized_examples)
+            | "InputsToExtracts" >> model_eval_lib.InputsToExtracts()
+            | "ExtractAndEvaluate"
+            >> model_eval_lib.ExtractAndEvaluate(extractors=[], evaluators=[])
+        )
         pipeline_result = p.run()
+        pipeline_result.wait_until_finish()
         metrics = pipeline_result.metrics()
         actual_counter = metrics.query(
             beam.metrics.metric.MetricsFilter().with_name("extract_input_bytes")
@@ -1566,15 +1561,16 @@ class EvaluateTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase
         decoder = example_coder.ExamplesToRecordBatchDecoder()
         record_batch = decoder.DecodeBatch(examples)
         expected_num_bytes = record_batch.nbytes
-        with beam.Pipeline() as p:
-            _ = (
-                p
-                | beam.Create(record_batch)
-                | "BatchedInputsToExtracts" >> model_eval_lib.BatchedInputsToExtracts()
-                | "ExtractAndEvaluate"
-                >> model_eval_lib.ExtractAndEvaluate(extractors=[], evaluators=[])
-            )
+        p = beam.Pipeline()
+        _ = (
+            p
+            | beam.Create(record_batch)
+            | "BatchedInputsToExtracts" >> model_eval_lib.BatchedInputsToExtracts()
+            | "ExtractAndEvaluate"
+            >> model_eval_lib.ExtractAndEvaluate(extractors=[], evaluators=[])
+        )
         pipeline_result = p.run()
+        pipeline_result.wait_until_finish()
         metrics = pipeline_result.metrics()
         actual_counter = metrics.query(
             beam.metrics.metric.MetricsFilter().with_name("extract_input_bytes")

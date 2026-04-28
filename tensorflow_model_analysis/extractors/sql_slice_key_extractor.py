@@ -20,7 +20,10 @@ from typing import List, Mapping
 import apache_beam as beam
 import pyarrow as pa
 import tensorflow as tf
-from tfx_bsl.arrow import sql_util
+try:
+    from tfx_bsl.arrow import sql_util
+except ImportError:
+    sql_util = None
 from tfx_bsl.tfxio import tensor_to_arrow
 
 from tensorflow_model_analysis import constants
@@ -83,9 +86,14 @@ class ExtractSqlSliceKeyFn(beam.DoFn):
     def setup(self):
         def _GenerateQueries(
             schema: pa.Schema,
-        ) -> List[sql_util.RecordBatchSQLSliceQuery]:
+        ):
             result = []
             for sql in self._sqls:
+                if not sql_util:
+                    raise RuntimeError(
+                        "SQL slicing is not supported in this environment. "
+                        "Please ensure that tfx-bsl is installed with SQL support."
+                    )
                 try:
                     result.append(sql_util.RecordBatchSQLSliceQuery(sql, schema))
                 except Exception as e:

@@ -71,13 +71,25 @@ def get_fpl_copy(extracts: types.Extracts) -> types.FeaturesPredictionsLabels:
 def update_fpl_features(
     fpl: types.FeaturesPredictionsLabels,
     new_features: types.DictOfFetchedTensorValues,
-):
-    """Add new features to the FPL."""
+) -> types.FeaturesPredictionsLabels:
+    """Returns a new FPL with added new features."""
+    updated_features = dict(fpl.features)
     for key, value in new_features.items():
         # if the key already exists in the dictionary, throw an error.
-        if key in fpl.features:
+        if key in updated_features:
             raise ValueError("Modification of existing keys is not allowed.")
-        _set_feature_value(fpl.features, key, value)
+        if not isinstance(value, np.ndarray) and not isinstance(
+            value, tf.compat.v1.SparseTensorValue
+        ):
+            value = np.array([value])
+        updated_features[key] = {_ENCODING_NODE_SUFFIX: value}
+        
+    return types.FeaturesPredictionsLabels(
+        features=updated_features,
+        labels=fpl.labels,
+        predictions=fpl.predictions,
+        input_ref=fpl.input_ref,
+    )
 
 
 def _ExtractMetaFeature(  # pylint: disable=invalid-name
@@ -92,10 +104,10 @@ def _ExtractMetaFeature(  # pylint: disable=invalid-name
     new_features = new_features_fn(fpl_copy)
 
     # Add the new features to the existing ones.
-    update_fpl_features(fpl_copy, new_features)
+    fpl_updated = update_fpl_features(fpl_copy, new_features)
 
     result = copy.copy(extracts)
-    result[constants.FEATURES_PREDICTIONS_LABELS_KEY] = fpl_copy
+    result[constants.FEATURES_PREDICTIONS_LABELS_KEY] = fpl_updated
     return result
 
 

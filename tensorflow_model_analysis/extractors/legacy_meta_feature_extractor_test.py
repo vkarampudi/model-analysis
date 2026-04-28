@@ -28,6 +28,47 @@ from tensorflow_model_analysis.slicer import slicer_lib as slicer
 from tensorflow_model_analysis.utils import test_util
 
 
+class CheckMetaFeaturesResult(object):
+
+    def __call__(self, got):
+        if len(got) != 2:
+            raise ValueError("Expected 2 results, got %s" % got)
+        for res in got:
+            if (
+                "num_interests"
+                not in res[constants.FEATURES_PREDICTIONS_LABELS_KEY].features
+            ):
+                raise ValueError("Expected num_interests in features")
+            expected = len(
+                meta_feature_extractor.get_feature_value(
+                    res[constants.FEATURES_PREDICTIONS_LABELS_KEY], "interest"
+                )
+            )
+            actual = meta_feature_extractor.get_feature_value(
+                res[constants.FEATURES_PREDICTIONS_LABELS_KEY], "num_interests"
+            )
+            if expected != actual:
+                raise ValueError("Expected %s, got %s" % (expected, actual))
+
+
+class CheckSliceOnMetaFeatureResult(object):
+
+    def __call__(self, got):
+        if len(got) != 4:
+            raise ValueError("Expected 4 results, got %s" % got)
+        expected_slice_keys = [
+            (),
+            (),
+            (("num_interests", 1),),
+            (("num_interests", 2),),
+        ]
+        actual_slice_keys = sorted(slice_key for slice_key, _ in got)
+        if actual_slice_keys != sorted(expected_slice_keys):
+            raise ValueError(
+                "Expected slice keys %s, got %s" % (expected_slice_keys, actual_slice_keys)
+            )
+
+
 def make_features_dict(features_dict):
     result = {}
     for key, value in features_dict.items():
@@ -90,36 +131,13 @@ class MetaFeatureExtractorTest(test_util.TensorflowModelAnalysisTest):
                 >> meta_feature_extractor.ExtractMetaFeature(get_num_interests)
             )
 
-            def check_result(got):
-                try:
-                    self.assertEqual(2, len(got), "got: %s" % got)
-                    for res in got:
-                        self.assertIn(
-                            "num_interests",
-                            res[constants.FEATURES_PREDICTIONS_LABELS_KEY].features,
-                        )
-                        self.assertEqual(
-                            len(
-                                meta_feature_extractor.get_feature_value(
-                                    res[constants.FEATURES_PREDICTIONS_LABELS_KEY],
-                                    "interest",
-                                )
-                            ),
-                            meta_feature_extractor.get_feature_value(
-                                res[constants.FEATURES_PREDICTIONS_LABELS_KEY],
-                                "num_interests",
-                            ),
-                        )
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
-            util.assert_that(metrics, check_result)
+            util.assert_that(metrics, CheckMetaFeaturesResult())
 
     def testNoModificationOfExistingKeys(self):
         def bad_meta_feature_fn(_):
             return {"interest": ["bad", "key"]}
 
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(Exception, "Modification of existing keys is not allowed"):
             with beam.Pipeline() as pipeline:
                 fpls = create_fpls()
 
@@ -152,23 +170,7 @@ class MetaFeatureExtractorTest(test_util.TensorflowModelAnalysisTest):
                 | "FanoutSlices" >> slicer.FanoutSlices()
             )
 
-            def check_result(got):
-                try:
-                    self.assertEqual(4, len(got), "got: %s" % got)
-                    expected_slice_keys = [
-                        (),
-                        (),
-                        (("num_interests", 1),),
-                        (("num_interests", 2),),
-                    ]
-                    self.assertCountEqual(
-                        sorted(slice_key for slice_key, _ in got),
-                        sorted(expected_slice_keys),
-                    )
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
-            util.assert_that(metrics, check_result)
+            util.assert_that(metrics, CheckSliceOnMetaFeatureResult())
 
     def testGetSparseTensorValue(self):
         sparse_tensor_value = tf.compat.v1.SparseTensorValue(

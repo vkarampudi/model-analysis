@@ -4,9 +4,34 @@
 
 ## Major Features and Improvements
 
+*   Adds official support for Python 3.12 and 3.13.
+*   Drops support for Python 3.9.
+*   Depends on `tensorflow>=2.21.0,<2.22.0`.
+*   Depends on `protobuf>=6.31.1,<7.0.0`.
+*   Depends on `pyarrow>14`.
+*   Updates the minimum Bazel version required to build TFMA to 7.4.1.
+
 ## Bug fixes and other Changes
 
+*   **Pickling Stability Architecture**:
+    *   Refactored core test modules (`rouge_test.py`, `stats_test.py`, `model_util_test.py`, `confidence_intervals_util_test.py`, `metrics_plots_and_validations_evaluator_test.py`) to use a new **class-based matcher architecture**.
+    *   Replaced nested closures with module-level classes (e.g., `CheckResult`, `CheckResultMean`) to ensure full serializability for `PrismRunner` on Python 3.13.
+    *   Removed `self` (test instance) capture in Beam matchers to resolve `RuntimeError: Unable to pickle fn` during distributed execution.
+    *   Enabled `--no_save_main_session` for all Beam pipelines in the test suite to prevent unintentional serialization of the main session and shared resources.
+*   **Beam Execution & Metrics Verification**:
+    *   Refactored `CounterUtilTest` and `model_eval_lib_test.py` to correctly capture and wait for `PipelineResult`, ensuring reliable metric retrieval across different Beam runners.
+*   **SQL Support Handlers**:
+    *   Implemented conditional skipping for SQL-dependent tests (e.g., `sql_slice_key_extractor_test.py`) in environments where SQL binary bindings are missing.
+*   **General Test Suite Improvements**:
+    *   Fixed `UnparsedFlagAccessError` in `ModelSignaturesDoFn` tests by removing direct `absl.flags` access in pickling-sensitive contexts.
+    *   Removed obsolete `@unittest.expectedFailure` decorators from tests that are now passing in the stabilized environment.
+    *   Fixed various indentation and syntax errors in utility tests.
+    *   Improved virtual environment relocation strategy to resolve Bazel sandbox access issues for `numpy` and other C-extension headers.
+*   **Simplified Dependencies**:
+    *   Consolidated `apache-beam` dependency into a single non-conditional constraint (`>=2.53,<3`) for all supported Python versions.
+
 ## Breaking Changes
+*   Python 3.9 is no longer supported. The minimum supported Python version is now 3.10.
 
 ## Deprecations
 

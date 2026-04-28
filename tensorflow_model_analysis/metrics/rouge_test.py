@@ -41,14 +41,108 @@ def _get_result(pipeline, examples, combiner):
     )
 
 
-class RogueTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
-    def _check_got(self, got, rouge_computation):
-        """Checks that the slice key is an empty tuple and the expected MetricKey is in the metric."""
-        self.assertLen(got, 1)
+class CheckResult:
+    def __init__(self, expected_name, rouge_computation):
+        self.expected_name = expected_name
+        self.rouge_computation = rouge_computation
+
+    def __call__(self, got):
+        if len(got) != 1:
+            raise ValueError(f"Expected 1 result, got {len(got)}")
         got_slice_key, got_metrics = got[0]
-        self.assertEqual(got_slice_key, ())
-        self.assertIn(rouge_computation.keys[0], got_metrics)
-        return got_metrics
+        if got_slice_key != ():
+            raise ValueError(f"Expected slice_key to be (), got {got_slice_key}")
+        if self.rouge_computation.keys[0] not in got_metrics:
+            raise ValueError(f"Expected {self.rouge_computation.keys[0]} in got_metrics")
+        
+        got_name = next(iter(got_metrics.keys())).name
+        if got_name != self.expected_name:
+            raise ValueError(f"Expected name {self.expected_name}, got {got_name}")
+
+class CheckResultScores:
+    def __init__(self, rouge_key, rouge_computation, expected_precision, expected_recall, expected_fmeasure, places=None):
+        self.rouge_key = rouge_key
+        self.rouge_computation = rouge_computation
+        self.expected_precision = expected_precision
+        self.expected_recall = expected_recall
+        self.expected_fmeasure = expected_fmeasure
+        self.places = places
+
+    def __call__(self, got):
+        if len(got) != 1:
+            raise ValueError(f"Expected 1 result, got {len(got)}")
+        got_slice_key, got_metrics = got[0]
+        if got_slice_key != ():
+            raise ValueError(f"Expected slice_key to be (), got {got_slice_key}")
+        
+        got_precision = got_metrics[self.rouge_key].precision
+        got_recall = got_metrics[self.rouge_key].recall
+        got_fmeasure = got_metrics[self.rouge_key].fmeasure
+
+        delta = 10**-self.places if self.places else 1e-7
+        if abs(got_precision - self.expected_precision) > delta:
+            raise ValueError(f"Precision mismatch: expected {self.expected_precision}, got {got_precision}")
+        if abs(got_recall - self.expected_recall) > delta:
+            raise ValueError(f"Recall mismatch: expected {self.expected_recall}, got {got_recall}")
+        if abs(got_fmeasure - self.expected_fmeasure) > delta:
+            raise ValueError(f"F-measure mismatch: expected {self.expected_fmeasure}, got {got_fmeasure}")
+
+class CheckResultNan:
+    def __init__(self, rouge_key, rouge_computation):
+        self.rouge_key = rouge_key
+        self.rouge_computation = rouge_computation
+
+    def __call__(self, got):
+        if len(got) != 1:
+            raise ValueError(f"Expected 1 result, got {len(got)}")
+        got_slice_key, got_metrics = got[0]
+        if got_slice_key != ():
+            raise ValueError(f"Expected slice_key to be (), got {got_slice_key}")
+        
+        if not np.isnan(got_metrics[self.rouge_key].precision):
+            raise ValueError("Expected NaN precision")
+        if not np.isnan(got_metrics[self.rouge_key].recall):
+            raise ValueError("Expected NaN recall")
+        if not np.isnan(got_metrics[self.rouge_key].fmeasure):
+            raise ValueError("Expected NaN fmeasure")
+
+class CheckResultScoresE2E:
+    def __init__(self, rouge_key, rouge_type, expected_unweighted_scores, example_weights):
+        self.rouge_key = rouge_key
+        self.rouge_type = rouge_type
+        self.expected_unweighted_scores = expected_unweighted_scores
+        self.example_weights = example_weights
+
+    def __call__(self, got):
+        if len(got) != 1:
+            raise ValueError(f"Expected 1 result, got {len(got)}")
+        got_slice_key, got_metrics = got[0]
+        if got_slice_key != ():
+            raise ValueError(f"Expected (), got {got_slice_key}")
+        if self.rouge_key not in got_metrics:
+            raise ValueError(f"Expected {self.rouge_key} in got_metrics")
+
+        expected_precision = np.average(
+            self.expected_unweighted_scores[self.rouge_type][0],
+            weights=self.example_weights,
+        )
+        expected_recall = np.average(
+            self.expected_unweighted_scores[self.rouge_type][1],
+            weights=self.example_weights,
+        )
+        expected_fmeasure = np.average(
+            self.expected_unweighted_scores[self.rouge_type][2],
+            weights=self.example_weights,
+        )
+
+        if abs(got_metrics[self.rouge_key].precision - expected_precision) > 1e-7:
+            raise ValueError("Precision mismatch")
+        if abs(got_metrics[self.rouge_key].recall - expected_recall) > 1e-7:
+            raise ValueError("Recall mismatch")
+        if abs(got_metrics[self.rouge_key].fmeasure - expected_fmeasure) > 1e-7:
+            raise ValueError("F-measure mismatch")
+
+class RougeTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
 
     @parameterized.parameters(["rougen", "rouge0", "rouge10"])
     def testInvalidRougeTypes(self, rouge_type):
@@ -59,7 +153,9 @@ class RogueTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
             constants.PREDICTIONS_KEY: prediction_text,
         }
         rouge_computation = rouge.Rouge(rouge_type).computations()[0]
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(
+            (ValueError, RuntimeError), "(Invalid rouge type|rougen requires positive n)"
+        ):
             with beam.Pipeline() as pipeline:
                 _get_result(
                     pipeline=pipeline,
@@ -90,22 +186,20 @@ class RogueTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
             constants.PREDICTIONS_KEY: prediction_text,
         }
         rouge_computation = rouge.Rouge(rouge_type).computations()[0]
-        with beam.Pipeline() as pipeline:
+        with beam.Pipeline(
+            options=beam.options.pipeline_options.PipelineOptions(
+                flags=["--no_save_main_session"]
+            )
+        ) as pipeline:
             result = _get_result(
                 pipeline=pipeline,
                 examples=[example],
                 combiner=rouge_computation.combiner,
             )
 
-            def check_result(got):
-                try:
-                    got_metrics = self._check_got(got, rouge_computation)
-                    self.assertEqual(next(iter(got_metrics.keys())).name, rouge_type)
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
-            util.assert_that(result, check_result, label="result")
+            util.assert_that(
+                result, CheckResult(rouge_type, rouge_computation), label="result"
+            )
 
     @parameterized.parameters(["rouge1", "rouge2", "rougeL", "rougeLsum"])
     def testNameOverride(self, rouge_type):
@@ -119,22 +213,22 @@ class RogueTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
         rouge_computation = rouge.Rouge(rouge_type, name=expected_name).computations()[
             0
         ]
-        with beam.Pipeline() as pipeline:
+        with beam.Pipeline(
+            options=beam.options.pipeline_options.PipelineOptions(
+                flags=["--no_save_main_session"]
+            )
+        ) as pipeline:
             result = _get_result(
                 pipeline=pipeline,
                 examples=[example],
                 combiner=rouge_computation.combiner,
             )
 
-            def check_result(got):
-                try:
-                    got_metrics = self._check_got(got, rouge_computation)
-                    self.assertEqual(next(iter(got_metrics.keys())).name, expected_name)
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
-            util.assert_that(result, check_result, label="result")
+            util.assert_that(
+                result,
+                CheckResult(expected_name, rouge_computation),
+                label="result",
+            )
 
     @parameterized.named_parameters(
         (
@@ -192,30 +286,28 @@ class RogueTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
         }
         rouge_key = metric_types.MetricKey(name=rouge_type)
         rouge_computation = rouge.Rouge(rouge_type).computations()[0]
-        with beam.Pipeline() as pipeline:
+        with beam.Pipeline(
+            options=beam.options.pipeline_options.PipelineOptions(
+                flags=["--no_save_main_session"]
+            )
+        ) as pipeline:
             result = _get_result(
                 pipeline=pipeline,
                 examples=[example],
                 combiner=rouge_computation.combiner,
             )
 
-            def check_result(got):
-                try:
-                    got_metrics = self._check_got(got, rouge_computation)
-                    self.assertAlmostEqual(
-                        expected_precision, got_metrics[rouge_key].precision
-                    )
-                    self.assertAlmostEqual(
-                        expected_recall, got_metrics[rouge_key].recall
-                    )
-                    self.assertAlmostEqual(
-                        expected_fmeasure, got_metrics[rouge_key].fmeasure
-                    )
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
-            util.assert_that(result, check_result, label="result")
+            util.assert_that(
+                result,
+                CheckResultScores(
+                    rouge_key,
+                    rouge_computation,
+                    expected_precision,
+                    expected_recall,
+                    expected_fmeasure,
+                ),
+                label="result",
+            )
 
     @parameterized.parameters("rouge1", "rouge2", "rougeL", "rougeLsum")
     def testRougeMultipleExampleWeights(self, rouge_type):
@@ -225,7 +317,10 @@ class RogueTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
             constants.EXAMPLE_WEIGHTS_KEY: [0.4, 0.6],
         }
         rouge_computation = rouge.Rouge(rouge_type).computations()[0]
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(
+            (ValueError, RuntimeError),
+            "if example_weight size > 0, the values must all be the same",
+        ):
             with beam.Pipeline() as pipeline:
                 _get_result(
                     pipeline=pipeline,
@@ -297,23 +392,17 @@ class RogueTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
                 combiner=rouge_computation.combiner,
             )
 
-            def check_result(got):
-                try:
-                    got_metrics = self._check_got(got, rouge_computation)
-                    self.assertAlmostEqual(
-                        expected_precision, got_metrics[rouge_key].precision
-                    )
-                    self.assertAlmostEqual(
-                        expected_recall, got_metrics[rouge_key].recall
-                    )
-                    self.assertAlmostEqual(
-                        expected_fmeasure, got_metrics[rouge_key].fmeasure
-                    )
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
-            util.assert_that(result, check_result, label="result")
+            util.assert_that(
+                result,
+                CheckResultScores(
+                    rouge_key,
+                    rouge_computation,
+                    expected_precision,
+                    expected_recall,
+                    expected_fmeasure,
+                ),
+                label="result",
+            )
 
     @parameterized.named_parameters(
         [
@@ -376,30 +465,29 @@ class RogueTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
         }
         rouge_key = metric_types.MetricKey(name=rouge_type)
         rouge_computation = rouge.Rouge(rouge_type).computations()[0]
-        with beam.Pipeline() as pipeline:
+        with beam.Pipeline(
+            options=beam.options.pipeline_options.PipelineOptions(
+                flags=["--no_save_main_session"]
+            )
+        ) as pipeline:
             result = _get_result(
                 pipeline=pipeline,
                 examples=[example1, example2],
                 combiner=rouge_computation.combiner,
             )
 
-            def check_result(got):
-                try:
-                    got_metrics = self._check_got(got, rouge_computation)
-                    self.assertAlmostEqual(
-                        expected_precision, got_metrics[rouge_key].precision, places=6
-                    )
-                    self.assertAlmostEqual(
-                        expected_recall, got_metrics[rouge_key].recall, places=6
-                    )
-                    self.assertAlmostEqual(
-                        expected_fmeasure, got_metrics[rouge_key].fmeasure, places=6
-                    )
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
-            util.assert_that(result, check_result, label="result")
+            util.assert_that(
+                result,
+                CheckResultScores(
+                    rouge_key,
+                    rouge_computation,
+                    expected_precision,
+                    expected_recall,
+                    expected_fmeasure,
+                    places=6,
+                ),
+                label="result",
+            )
 
     example_weights = [0.5, 0.7]
 
@@ -466,30 +554,28 @@ class RogueTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
         }
         rouge_key = metric_types.MetricKey(name=rouge_type)
         rouge_computation = rouge.Rouge(rouge_type).computations()[0]
-        with beam.Pipeline() as pipeline:
+        with beam.Pipeline(
+            options=beam.options.pipeline_options.PipelineOptions(
+                flags=["--no_save_main_session"]
+            )
+        ) as pipeline:
             result = _get_result(
                 pipeline=pipeline,
                 examples=[example1, example2],
                 combiner=rouge_computation.combiner,
             )
 
-            def check_result(got):
-                try:
-                    got_metrics = self._check_got(got, rouge_computation)
-                    self.assertAlmostEqual(
-                        expected_precision, got_metrics[rouge_key].precision
-                    )
-                    self.assertAlmostEqual(
-                        expected_recall, got_metrics[rouge_key].recall
-                    )
-                    self.assertAlmostEqual(
-                        expected_fmeasure, got_metrics[rouge_key].fmeasure
-                    )
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
-            util.assert_that(result, check_result, label="result")
+            util.assert_that(
+                result,
+                CheckResultScores(
+                    rouge_key,
+                    rouge_computation,
+                    expected_precision,
+                    expected_recall,
+                    expected_fmeasure,
+                ),
+                label="result",
+            )
 
     @parameterized.parameters("rouge1", "rouge2", "rougeL", "rougeLsum")
     def testRougeWeightedCountIsZero(self, rouge_type):
@@ -500,24 +586,22 @@ class RogueTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
         }
         rouge_key = metric_types.MetricKey(name=rouge_type)
         rouge_computation = rouge.Rouge(rouge_type).computations()[0]
-        with beam.Pipeline() as pipeline:
+        with beam.Pipeline(
+            options=beam.options.pipeline_options.PipelineOptions(
+                flags=["--no_save_main_session"]
+            )
+        ) as pipeline:
             result = _get_result(
                 pipeline=pipeline,
                 examples=[example],
                 combiner=rouge_computation.combiner,
             )
 
-            def check_result(got):
-                try:
-                    got_metrics = self._check_got(got, rouge_computation)
-                    self.assertTrue(np.isnan(got_metrics[rouge_key].precision))
-                    self.assertTrue(np.isnan(got_metrics[rouge_key].recall))
-                    self.assertTrue(np.isnan(got_metrics[rouge_key].fmeasure))
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
-            util.assert_that(result, check_result, label="result")
+            util.assert_that(
+                result,
+                CheckResultNan(rouge_key, rouge_computation),
+                label="result",
+            )
 
     def testRougeLSumSentenceSplitting(self):
         rouge_type = "rougeLsum"
@@ -533,24 +617,28 @@ class RogueTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
             constants.PREDICTIONS_KEY: prediction_text,
         }
         with self.assertLogs(level="INFO") as cm:
-            with beam.Pipeline() as pipeline:
+            with beam.Pipeline(
+                options=beam.options.pipeline_options.PipelineOptions(
+                    flags=["--no_save_main_session"]
+                )
+            ) as pipeline:
                 result = _get_result(
                     pipeline=pipeline,
                     examples=[example],
                     combiner=rouge_computation.combiner,
                 )
 
-                def check_result_newline(got):
-                    try:
-                        got_metrics = self._check_got(got, rouge_computation)
-                        self.assertAlmostEqual(1, got_metrics[rouge_key].precision)
-                        self.assertAlmostEqual(1, got_metrics[rouge_key].recall)
-                        self.assertAlmostEqual(1, got_metrics[rouge_key].fmeasure)
-
-                    except AssertionError as err:
-                        raise util.BeamAssertException(err)
-
-                util.assert_that(result, check_result_newline, label="result")
+                util.assert_that(
+                    result,
+                    CheckResultScores(
+                        rouge_key,
+                        rouge_computation,
+                        1,
+                        1,
+                        1,
+                    ),
+                    label="result",
+                )
         self.assertNotIn(tokenizer_preparer_logging_message, cm.output)
 
         # Without newlines, summaries are treated as single sentences.
@@ -561,45 +649,53 @@ class RogueTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
             constants.PREDICTIONS_KEY: prediction_text,
         }
         with self.assertLogs(level="INFO") as cm:
-            with beam.Pipeline() as pipeline:
+            with beam.Pipeline(
+                options=beam.options.pipeline_options.PipelineOptions(
+                    flags=["--no_save_main_session"]
+                )
+            ) as pipeline:
                 result = _get_result(
                     pipeline=pipeline,
                     examples=[example],
                     combiner=rouge_computation.combiner,
                 )
 
-                def check_result_sentences(got):
-                    try:
-                        got_metrics = self._check_got(got, rouge_computation)
-                        self.assertAlmostEqual(1 / 2, got_metrics[rouge_key].precision)
-                        self.assertAlmostEqual(1 / 2, got_metrics[rouge_key].recall)
-                        self.assertAlmostEqual(1 / 2, got_metrics[rouge_key].fmeasure)
-
-                    except AssertionError as err:
-                        raise util.BeamAssertException(err)
-
-                util.assert_that(result, check_result_sentences, label="result")
+                util.assert_that(
+                    result,
+                    CheckResultScores(
+                        rouge_key,
+                        rouge_computation,
+                        1 / 2,
+                        1 / 2,
+                        1 / 2,
+                    ),
+                    label="result",
+                )
         self.assertNotIn(tokenizer_preparer_logging_message, cm.output)
 
         def check_split_summaries_result():
-            with beam.Pipeline() as pipeline:
+            with beam.Pipeline(
+                options=beam.options.pipeline_options.PipelineOptions(
+                    flags=["--no_save_main_session"]
+                )
+            ) as pipeline:
                 result = _get_result(
                     pipeline=pipeline,
                     examples=[example],
                     combiner=rouge_computation.combiner,
                 )
 
-                def check_result_nltk(got):
-                    try:
-                        got_metrics = self._check_got(got, rouge_computation)
-                        self.assertAlmostEqual(1, got_metrics[rouge_key].precision)
-                        self.assertAlmostEqual(1, got_metrics[rouge_key].recall)
-                        self.assertAlmostEqual(1, got_metrics[rouge_key].fmeasure)
-
-                    except AssertionError as err:
-                        raise util.BeamAssertException(err)
-
-                util.assert_that(result, check_result_nltk, label="result")
+                util.assert_that(
+                    result,
+                    CheckResultScores(
+                        rouge_key,
+                        rouge_computation,
+                        1,
+                        1,
+                        1,
+                    ),
+                    label="result",
+                )
 
         # Split summaries into sentences using nltk
         rouge_computation = rouge.Rouge(
@@ -619,24 +715,28 @@ class RogueTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
         rouge_computation = rouge.Rouge(
             rouge_type, tokenizer=tokenizers.DefaultTokenizer()
         ).computations()[0]
-        with beam.Pipeline() as pipeline:
+        with beam.Pipeline(
+            options=beam.options.pipeline_options.PipelineOptions(
+                flags=["--no_save_main_session"]
+            )
+        ) as pipeline:
             result = _get_result(
                 pipeline=pipeline,
                 examples=[example],
                 combiner=rouge_computation.combiner,
             )
 
-            def check_result(got):
-                try:
-                    got_metrics = self._check_got(got, rouge_computation)
-                    self.assertAlmostEqual(1, got_metrics[rouge_key].precision)
-                    self.assertAlmostEqual(1 / 3, got_metrics[rouge_key].recall)
-                    self.assertAlmostEqual(1 / 2, got_metrics[rouge_key].fmeasure)
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
-            util.assert_that(result, check_result, label="result")
+            util.assert_that(
+                result,
+                CheckResultScores(
+                    rouge_key,
+                    rouge_computation,
+                    1,
+                    1 / 3,
+                    1 / 2,
+                ),
+                label="result",
+            )
 
 
 class RougeEnd2EndTest(parameterized.TestCase):
@@ -699,7 +799,11 @@ class RougeEnd2EndTest(parameterized.TestCase):
         for rouge_type in rouge_types:
             rouge_key = metric_types.MetricKey(name=rouge_type)
 
-            with beam.Pipeline() as pipeline:
+            with beam.Pipeline(
+                options=beam.options.pipeline_options.PipelineOptions(
+                    flags=["--no_save_main_session"]
+                )
+            ) as pipeline:
                 result = (
                     pipeline
                     | "LoadData" >> beam.Create(extracts)
@@ -709,39 +813,17 @@ class RougeEnd2EndTest(parameterized.TestCase):
                     ).ptransform
                 )
 
-                def check_result(got, rouge_key=rouge_key, rouge_type=rouge_type):
-                    try:
-                        self.assertLen(got, 1)
-                        got_slice_key, got_metrics = got[0]
-                        self.assertEqual(got_slice_key, ())
-                        self.assertIn(rouge_key, got_metrics.keys())
-                        self.assertAlmostEqual(
-                            np.average(
-                                expected_unweighted_scores[rouge_type][0],
-                                weights=example_weights,
-                            ),
-                            got_metrics[rouge_key].precision,
-                        )
-                        self.assertAlmostEqual(
-                            np.average(
-                                expected_unweighted_scores[rouge_type][1],
-                                weights=example_weights,
-                            ),
-                            got_metrics[rouge_key].recall,
-                        )
-                        self.assertAlmostEqual(
-                            np.average(
-                                expected_unweighted_scores[rouge_type][2],
-                                weights=example_weights,
-                            ),
-                            got_metrics[rouge_key].fmeasure,
-                        )
-
-                    except AssertionError as err:
-                        raise util.BeamAssertException(err)
-
                 self.assertIn("metrics", result)
-                util.assert_that(result["metrics"], check_result, label="result")
+                util.assert_that(
+                    result["metrics"],
+                    CheckResultScoresE2E(
+                        rouge_key,
+                        rouge_type,
+                        expected_unweighted_scores,
+                        example_weights,
+                    ),
+                    label="result",
+                )
 
 
 if __name__ == "__main__":

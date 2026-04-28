@@ -19,6 +19,7 @@ import apache_beam as beam
 import numpy as np
 import tensorflow as tf
 from absl.testing import parameterized
+from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.testing import util
 from google.protobuf import text_format
 from tensorflow_metadata.proto.v0 import schema_pb2
@@ -47,9 +48,99 @@ from tensorflow_model_analysis.metrics import (
 )
 from tensorflow_model_analysis.proto import config_pb2, validation_result_pb2
 from tensorflow_model_analysis.utils import test_util as testutil
+from tensorflow_model_analysis.utils import util as tfma_util
 from tensorflow_model_analysis.utils.keras_lib import tf_keras
 
 _TF_MAJOR_VERSION = int(tf.version.VERSION.split(".")[0])
+
+
+from tensorflow_model_analysis.api import types
+
+def _is_close(actual, expected):
+    if isinstance(actual, types.ValueWithTDistribution):
+        actual = actual.unsampled_value
+    if actual is None:
+        return expected is None
+    return np.isclose(actual, expected)
+
+
+def _check_metrics_keras_diff(
+    weighted_example_count_key, label_key, prediction_key, expected_prediction_value
+):
+    def check_metrics(got):
+        if len(got) != 1:
+            raise ValueError(f"Expected 1 result, got {len(got)}")
+        got_slice_key, got_metrics = got[0]
+        if got_slice_key != ():
+            raise ValueError(f"Expected empty slice key, got {got_slice_key}")
+        if not _is_close(got_metrics.get(weighted_example_count_key), 0):
+            raise ValueError(
+                f"Unexpected weighted_example_count: {got_metrics.get(weighted_example_count_key)}"
+            )
+        if not _is_close(got_metrics.get(label_key), 0):
+            raise ValueError(f"Unexpected label_key: {got_metrics.get(label_key)}")
+        if not _is_close(
+            got_metrics.get(prediction_key), expected_prediction_value
+        ):
+            raise ValueError(
+                f"Unexpected prediction_key: {got_metrics.get(prediction_key)}, expected {expected_prediction_value}"
+            )
+
+    return check_metrics
+
+
+def _check_attributions(expected_attributions):
+    def check_attributions(got):
+        if len(got) != 1:
+            raise ValueError(f"Expected 1 result, got {len(got)}")
+        got_slice_key, got_attributions = got[0]
+        if got_slice_key != ():
+            raise ValueError(f"Expected empty slice key, got {got_slice_key}")
+        total_attributions_key = metric_types.MetricKey(name="total_attributions")
+        if total_attributions_key not in got_attributions:
+            raise ValueError("total_attributions_key not in results")
+        actual = got_attributions[total_attributions_key]
+        for k, v in expected_attributions.items():
+            if not np.isclose(actual[k], v):
+                raise ValueError(f"Unexpected attribution for {k}: {actual[k]}, expected {v}")
+
+    return check_attributions
+
+
+def _check_metrics_keras_ingraph(
+    example_count_key,
+    weighted_example_count_key,
+    label_key,
+    label_unweighted_key,
+    binary_accuracy_key,
+    expected_values,
+):
+    def check_metrics(got):
+        if len(got) != 1:
+            raise ValueError(f"Expected 1 result, got {len(got)}")
+        got_slice_key, got_metrics = got[0]
+        if got_slice_key != ():
+             raise ValueError(f"Expected empty slice key, got {got_slice_key}")
+        if binary_accuracy_key not in got_metrics:
+            raise ValueError(f"binary_accuracy_key {binary_accuracy_key} not in results")
+        for k, v in expected_values.items():
+            if not np.isclose(got_metrics[k], v):
+                 raise ValueError(f"Unexpected value for {k}: {got_metrics[k]}, expected {v}")
+
+    return check_metrics
+
+
+def _check_cross_slice_keys(expected_slice_keys):
+    def check_result(got_sliced_metrics):
+        actual_slice_keys = [k for k, _ in got_sliced_metrics]
+        if len(expected_slice_keys) != len(actual_slice_keys) or set(
+            expected_slice_keys
+        ) != set(actual_slice_keys):
+            raise ValueError(
+                f"Expected {expected_slice_keys}, got {actual_slice_keys}"
+            )
+
+    return check_result
 
 
 class MetricsPlotsAndValidationsEvaluatorTest(
@@ -273,7 +364,8 @@ class MetricsPlotsAndValidationsEvaluatorTest(
             )
         ]
 
-        with beam.Pipeline() as pipeline:
+        options = PipelineOptions(flags=["--no_save_main_session"])
+        with beam.Pipeline(options=options) as pipeline:
             # pylint: disable=no-value-for-parameter
             metrics = (
                 pipeline
@@ -288,44 +380,35 @@ class MetricsPlotsAndValidationsEvaluatorTest(
 
             # pylint: enable=no-value-for-parameter
 
-            def check_metrics(got):
-                try:
-                    self.assertLen(got, 1)
-                    got_slice_key, got_metrics = got[0]
-                    self.assertEqual(got_slice_key, ())
-                    # check only the diff metrics.
-                    weighted_example_count_key = metric_types.MetricKey(
-                        name="weighted_example_count",
-                        model_name="candidate",
-                        is_diff=True,
-                        example_weighted=True,
-                    )
-                    prediction_key = metric_types.MetricKey(
-                        name="mean_prediction",
-                        model_name="candidate",
-                        is_diff=True,
-                        example_weighted=True,
-                    )
-                    label_key = metric_types.MetricKey(
-                        name="mean_label",
-                        model_name="candidate",
-                        is_diff=True,
-                        example_weighted=True,
-                    )
-                    self.assertDictElementsAlmostEqual(
-                        got_metrics,
-                        {
-                            weighted_example_count_key: 0,
-                            label_key: 0,
-                            prediction_key: 0 - (0 * 1 + 1 * 0.5) / (1 + 0.5),
-                        },
-                    )
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
+            weighted_example_count_key = metric_types.MetricKey(
+                name="weighted_example_count",
+                model_name="candidate",
+                is_diff=True,
+                example_weighted=True,
+            )
+            prediction_key = metric_types.MetricKey(
+                name="mean_prediction",
+                model_name="candidate",
+                is_diff=True,
+                example_weighted=True,
+            )
+            label_key = metric_types.MetricKey(
+                name="mean_label",
+                model_name="candidate",
+                is_diff=True,
+                example_weighted=True,
+            )
+            expected_prediction_value = 0 - (0 * 1 + 1 * 0.5) / (1 + 0.5)
 
             util.assert_that(
-                metrics[constants.METRICS_KEY], check_metrics, label="metrics"
+                metrics[constants.METRICS_KEY],
+                _check_metrics_keras_diff(
+                    weighted_example_count_key,
+                    label_key,
+                    prediction_key,
+                    expected_prediction_value,
+                ),
+                label="metrics",
             )
 
     def testEvaluateWithAttributions(self):
@@ -376,7 +459,8 @@ class MetricsPlotsAndValidationsEvaluatorTest(
             },
         }
 
-        with beam.Pipeline() as pipeline:
+        options = PipelineOptions(flags=["--no_save_main_session"])
+        with beam.Pipeline(options=options) as pipeline:
             # pylint: disable=no-value-for-parameter
             results = (
                 pipeline
@@ -389,26 +473,14 @@ class MetricsPlotsAndValidationsEvaluatorTest(
 
             # pylint: enable=no-value-for-parameter
 
-            def check_attributions(got):
-                try:
-                    self.assertLen(got, 1)
-                    got_slice_key, got_attributions = got[0]
-                    self.assertEqual(got_slice_key, ())
-                    total_attributions_key = metric_types.MetricKey(
-                        name="total_attributions"
-                    )
-                    self.assertIn(total_attributions_key, got_attributions)
-                    self.assertDictElementsAlmostEqual(
-                        got_attributions[total_attributions_key],
-                        {"feature1": 1.1 + 2.1 + 3.1, "feature2": 1.2 + 2.2 + 3.2},
-                    )
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
+            expected_attributions = {
+                "feature1": 1.1 + 2.1 + 3.1,
+                "feature2": 1.2 + 2.2 + 3.2,
+            }
 
             util.assert_that(
                 results[constants.ATTRIBUTIONS_KEY],
-                check_attributions,
+                _check_attributions(expected_attributions),
                 label="attributions",
             )
 
@@ -532,7 +604,8 @@ class MetricsPlotsAndValidationsEvaluatorTest(
             )
         ]
 
-        with beam.Pipeline() as pipeline:
+        pb_options = PipelineOptions(flags=["--no_save_main_session"])
+        with beam.Pipeline(options=pb_options) as pipeline:
             # pylint: disable=no-value-for-parameter
             metrics = (
                 pipeline
@@ -548,43 +621,35 @@ class MetricsPlotsAndValidationsEvaluatorTest(
 
             # pylint: enable=no-value-for-parameter
 
-            def check_metrics(got):
-                try:
-                    self.assertLen(got, 1)
-                    got_slice_key, got_metrics = got[0]
-                    self.assertEqual(got_slice_key, ())
-                    # check only the diff metrics.
-                    weighted_example_count_key = metric_types.MetricKey(
-                        name="weighted_example_count",
-                        model_name="candidate",
-                        is_diff=True,
-                        example_weighted=True,
-                    )
-                    prediction_key = metric_types.MetricKey(
-                        name="mean_prediction",
-                        model_name="candidate",
-                        is_diff=True,
-                        example_weighted=True,
-                    )
-                    label_key = metric_types.MetricKey(
-                        name="mean_label",
-                        model_name="candidate",
-                        is_diff=True,
-                        example_weighted=True,
-                    )
-                    self.assertDictElementsWithTDistributionAlmostEqual(
-                        got_metrics,
-                        {
-                            weighted_example_count_key: 0,
-                            label_key: 0,
-                            prediction_key: 0 - (0 * 1 + 1 * 0.5) / (1 + 0.5),
-                        },
-                    )
+            weighted_example_count_key = metric_types.MetricKey(
+                name="weighted_example_count",
+                model_name="candidate",
+                is_diff=True,
+                example_weighted=True,
+            )
+            prediction_key = metric_types.MetricKey(
+                name="mean_prediction",
+                model_name="candidate",
+                is_diff=True,
+                example_weighted=True,
+            )
+            label_key = metric_types.MetricKey(
+                name="mean_label",
+                model_name="candidate",
+                is_diff=True,
+                example_weighted=True,
+            )
+            expected_prediction_value = 0 - (0 * 1 + 1 * 0.5) / (1 + 0.5)
 
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
-            util.assert_that(metrics[constants.METRICS_KEY], check_metrics)
+            util.assert_that(
+                metrics[constants.METRICS_KEY],
+                _check_metrics_keras_diff(
+                    weighted_example_count_key,
+                    label_key,
+                    prediction_key,
+                    expected_prediction_value,
+                ),
+            )
 
     @parameterized.named_parameters(
         ("compiled_metrics", False),
@@ -723,7 +788,8 @@ class MetricsPlotsAndValidationsEvaluatorTest(
                 eval_config=eval_config, eval_shared_model=eval_shared_model
             )
         ]
-        with beam.Pipeline() as pipeline:
+        options = PipelineOptions(flags=["--no_save_main_session"])
+        with beam.Pipeline(options=options) as pipeline:
             # pylint: disable=no-value-for-parameter
             metrics = (
                 pipeline
@@ -738,42 +804,35 @@ class MetricsPlotsAndValidationsEvaluatorTest(
 
             # pylint: enable=no-value-for-parameter
 
-            def check_metrics(got):
-                try:
-                    self.assertLen(got, 1)
-                    got_slice_key, got_metrics = got[0]
-                    self.assertEqual(got_slice_key, ())
-                    example_count_key = metric_types.MetricKey(name="example_count")
-                    weighted_example_count_key = metric_types.MetricKey(
-                        name="weighted_example_count", example_weighted=True
-                    )
-                    label_key = metric_types.MetricKey(
-                        name="mean_label", example_weighted=True
-                    )
-                    label_unweighted_key = metric_types.MetricKey(
-                        name="mean_label", example_weighted=False
-                    )
-                    binary_accuracy_key = metric_types.MetricKey(
-                        name="binary_accuracy", example_weighted=False
-                    )
-                    self.assertIn(binary_accuracy_key, got_metrics)
-                    binary_accuracy_unweighted_key = metric_types.MetricKey(
-                        name="binary_accuracy", example_weighted=False
-                    )
-                    self.assertIn(binary_accuracy_unweighted_key, got_metrics)
-                    expected_values = {
-                        example_count_key: 2,
-                        weighted_example_count_key: 1.0 + 0.5,
-                        label_key: (1.0 * 1.0 + 0.0 * 0.5) / (1.0 + 0.5),
-                        label_unweighted_key: (1.0 + 0.0) / (1.0 + 1.0),
-                    }
-                    self.assertDictElementsAlmostEqual(got_metrics, expected_values)
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
+            example_count_key = metric_types.MetricKey(name="example_count")
+            weighted_example_count_key = metric_types.MetricKey(
+                name="weighted_example_count", example_weighted=True
+            )
+            label_key = metric_types.MetricKey(name="mean_label", example_weighted=True)
+            label_unweighted_key = metric_types.MetricKey(
+                name="mean_label", example_weighted=False
+            )
+            binary_accuracy_key = metric_types.MetricKey(
+                name="binary_accuracy", example_weighted=False
+            )
+            expected_values = {
+                example_count_key: 2,
+                weighted_example_count_key: 1.0 + 0.5,
+                label_key: (1.0 * 1.0 + 0.0 * 0.5) / (1.0 + 0.5),
+                label_unweighted_key: (1.0 + 0.0) / (1.0 + 1.0),
+            }
 
             util.assert_that(
-                metrics[constants.METRICS_KEY], check_metrics, label="metrics"
+                metrics[constants.METRICS_KEY],
+                _check_metrics_keras_ingraph(
+                    example_count_key,
+                    weighted_example_count_key,
+                    label_key,
+                    label_unweighted_key,
+                    binary_accuracy_key,
+                    expected_values,
+                ),
+                label="metrics",
             )
 
     def testAddCrossSliceMetricsMatchAll(self):
@@ -788,7 +847,8 @@ class MetricsPlotsAndValidationsEvaluatorTest(
             (slice_key2, metrics_dict),
             (slice_key3, metrics_dict),
         ]
-        with beam.Pipeline() as pipeline:
+        options = PipelineOptions(flags=["--no_save_main_session"])
+        with beam.Pipeline(options=options) as pipeline:
             cross_sliced_metrics = (
                 pipeline
                 | "CreateSlicedMetrics" >> beam.Create(sliced_metrics)
@@ -801,22 +861,21 @@ class MetricsPlotsAndValidationsEvaluatorTest(
                 )
             )
 
-            def check_result(got_sliced_metrics):
-                actual_slice_keys = [k for k, _ in got_sliced_metrics]
-                expected_slice_keys = [
-                    # cross slice keys
-                    (overall_slice_key, slice_key1),
-                    (overall_slice_key, slice_key2),
-                    (overall_slice_key, slice_key3),
-                    # single slice keys
-                    overall_slice_key,
-                    slice_key1,
-                    slice_key2,
-                    slice_key3,
-                ]
-                self.assertCountEqual(expected_slice_keys, actual_slice_keys)
+            expected_slice_keys = [
+                # cross slice keys
+                (overall_slice_key, slice_key1),
+                (overall_slice_key, slice_key2),
+                (overall_slice_key, slice_key3),
+                # single slice keys
+                overall_slice_key,
+                slice_key1,
+                slice_key2,
+                slice_key3,
+            ]
 
-            util.assert_that(cross_sliced_metrics, check_result)
+            util.assert_that(
+                cross_sliced_metrics, _check_cross_slice_keys(expected_slice_keys)
+            )
 
     @parameterized.named_parameters(
         ("IntIsDiffable", 1, True),
@@ -896,7 +955,9 @@ class MetricsPlotsAndValidationsEvaluatorTest(
             )
         ]
 
-        with beam.Pipeline() as pipeline:
+        options = PipelineOptions(flags=["--no_save_main_session"])
+        with beam.Pipeline(options=options) as pipeline:
+            # pylint: disable=no-value-for-parameter
             _ = (
                 pipeline
                 | "Create" >> beam.Create([e.SerializeToString() for e in examples])
@@ -907,15 +968,14 @@ class MetricsPlotsAndValidationsEvaluatorTest(
                     extractors=extractors, evaluators=evaluators
                 )
             )
+        result = pipeline.run()
+        result.wait_until_finish()
 
         metric_filter = beam.metrics.metric.MetricsFilter().with_name(
             "metric_computed_ExampleCount_v2_" + constants.MODEL_AGNOSTIC
         )
         actual_metrics_count = (
-            pipeline.run()
-            .metrics()
-            .query(filter=metric_filter)["counters"][0]
-            .committed
+            result.metrics().query(filter=metric_filter)["counters"][0].committed
         )
         self.assertEqual(actual_metrics_count, 1)
 

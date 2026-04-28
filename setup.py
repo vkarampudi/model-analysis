@@ -319,21 +319,19 @@ setup_args = {
     "install_requires": [
         # Sort alphabetically
         "absl-py>=0.9,<2.0.0",
-        'apache-beam[gcp]>=2.53,<3;python_version>="3.11"',
-        'apache-beam[gcp]>=2.50,<2.51;python_version<"3.11"',
+        'apache-beam[gcp]>=2.53,<3',
         "ipython>=7,<8",
         "ipywidgets>=7,<8",
         "numpy>=1.23.5",
         "pandas>=1.0,<2",
         "pillow>=9.4.0",
-        'protobuf>=4.25.2,<6.0.0;python_version>="3.11"',
-        'protobuf>=4.21.6,<6.0.0;python_version<"3.11"',
-        "pyarrow>=10,<11",
+        'protobuf>=6.31.1',
+        "pyarrow>14",
         "rouge-score>=0.1.2,<2",
         "sacrebleu>=2.3,<4",
         "scipy>=1.4.1,<2",
         "six>=1.12,<2",
-        "tensorflow>=2.17,<2.18",
+        "tensorflow>=2.21.0",
         "tensorflow-estimator>=2.10",
         "tensorflow-metadata"
         + select_constraint(
@@ -343,17 +341,18 @@ setup_args = {
         ),
         "tfx-bsl"
         + select_constraint(
-            default=">=1.17.1,<1.18.0",
+            default="@git+https://github.com/vkarampudi/tfx-bsl@testing",
             nightly=">=1.18.0.dev",
-            git_master="@git+https://github.com/tensorflow/tfx-bsl@master",
+            git_master="@git+https://github.com/vkarampudi/tfx-bsl@testing",
         ),
         "tf-keras",
+
     ],
     "extras_require": {
         "all": [*_make_extra_packages_tfjs(), *_make_docs_packages()],
         "docs": _make_docs_packages(),
     },
-    "python_requires": ">=3.9,<4",
+    "python_requires": ">=3.10,<3.14",
     "packages": find_packages(),
     "zip_safe": False,
     "cmdclass": {
@@ -375,10 +374,12 @@ setup_args = {
         "Operating System :: OS Independent",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "Programming Language :: Python :: 3 :: Only",
+
         "Topic :: Scientific/Engineering",
         "Topic :: Scientific/Engineering :: Mathematics",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",

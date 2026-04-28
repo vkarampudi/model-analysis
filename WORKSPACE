@@ -2,20 +2,19 @@ workspace(name = "org_tensorflow_model_analysis")
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-# TF 2.17.1
+# TF 2.21.0
 # LINT.IfChange(tf_commit)
-_TENSORFLOW_GIT_COMMIT = "3c92ac03cab816044f7b18a86eb86aa01a294d95"
+_TENSORFLOW_GIT_COMMIT = "v2.21.0"
 
 # LINT.ThenChange(:io_bazel_rules_closure)
 http_archive(
     name = "org_tensorflow",
-    sha256 = "317dd95c4830a408b14f3e802698eb68d70d81c7c7cfcd3d28b0ba023fe84a68",
-    strip_prefix = "tensorflow-%s" % _TENSORFLOW_GIT_COMMIT,
+    strip_prefix = "tensorflow-%s" % "2.21.0",
     urls = [
-        "https://mirror.bazel.build/github.com/tensorflow/tensorflow/archive/%s.tar.gz" % _TENSORFLOW_GIT_COMMIT,
-        "https://github.com/tensorflow/tensorflow/archive/%s.tar.gz" % _TENSORFLOW_GIT_COMMIT,
+        "https://github.com/tensorflow/tensorflow/archive/refs/tags/v2.21.0.tar.gz",
     ],
 )
+
 
 # Needed by tensorboard. Because these http_archives do not handle transitive
 # dependencies, we need to unroll them here.
@@ -76,20 +75,20 @@ http_archive(
 
 load("@org_tensorflow_tensorboard//third_party:workspace.bzl", "tensorboard_workspace")
 
-_PROTOBUF_COMMIT = "4.25.6"  # 4.25.6
+_PROTOBUF_COMMIT = "v31.1"  # protobuf 6.31.1
 
 http_archive(
     name = "com_google_protobuf",
-    sha256 = "ff6e9c3db65f985461d200c96c771328b6186ee0b10bc7cb2bbc87cf02ebd864",
-    strip_prefix = "protobuf-%s" % _PROTOBUF_COMMIT,
+    strip_prefix = "protobuf-31.1",
     urls = [
-        "https://github.com/protocolbuffers/protobuf/archive/v4.25.6.zip",
+        "https://github.com/protocolbuffers/protobuf/archive/refs/tags/v31.1.zip",
     ],
 )
 
 load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
 
 protobuf_deps()
+
 
 tensorboard_workspace()
 
@@ -100,4 +99,4 @@ tensorflow_model_analysis_workspace()
 
 load("@bazel_skylib//lib:versions.bzl", "versions")
 
-versions.check("6.5.0")
+versions.check("7.4.1")

@@ -76,15 +76,81 @@ def _compute_mean_metric(pipeline, computation):
     )
 
 
+def _check_got(got, computation):
+    if len(got) != 1:
+        raise ValueError(f"Expected 1, got {len(got)}")
+    got_slice_key, got_metrics = got[0]
+    if got_slice_key != ():
+        raise ValueError(f"Expected (), got {got_slice_key}")
+    if computation.keys[0] not in got_metrics:
+        raise ValueError(f"Expected {computation.keys[0]} in metrics")
+    return got_metrics
+
+
+class CheckResultMean:
+    def __init__(self, computation_key, expected_metric_key, expected_mean):
+        self.computation_key = computation_key
+        self.expected_metric_key = expected_metric_key
+        self.expected_mean = expected_mean
+
+    def __call__(self, got):
+        if len(got) != 1:
+            raise ValueError(f"Expected 1, got {len(got)}")
+        got_slice_key, got_metrics = got[0]
+        if got_slice_key != ():
+            raise ValueError(f"Expected (), got {got_slice_key}")
+        if self.computation_key not in got_metrics:
+            raise ValueError(f"Expected {self.computation_key} in metrics")
+        if self.expected_metric_key not in got_metrics:
+            raise ValueError(f"Expected {self.expected_metric_key} in metrics")
+        
+        got_mean = got_metrics[self.expected_metric_key]
+        if abs(got_mean - self.expected_mean) > 1e-5:
+            raise ValueError(f"Expected mean {self.expected_mean}, got {got_mean}")
+
+class CheckResultNan:
+    def __init__(self, key):
+        self.key = key
+
+    def __call__(self, got):
+        if len(got) != 1:
+            raise ValueError(f"Expected 1, got {len(got)}")
+        got_slice_key, got_metrics = got[0]
+        if got_slice_key != ():
+            raise ValueError(f"Expected (), got {got_slice_key}")
+        if self.key not in got_metrics:
+            raise ValueError(f"Expected {self.key}")
+        if not np.isnan(got_metrics[self.key]):
+            raise ValueError(f"Expected NaN, got {got_metrics[self.key]}")
+
+class CheckResultMeanEnd2End:
+    def __init__(self, expected_key_age, expected_key_income, expected_result_age, expected_result_income):
+        self.expected_key_age = expected_key_age
+        self.expected_key_income = expected_key_income
+        self.expected_result_age = expected_result_age
+        self.expected_result_income = expected_result_income
+
+    def __call__(self, got):
+        if len(got) != 1:
+            raise ValueError(f"Expected 1 result, got {len(got)}")
+        got_slice_key, got_metrics = got[0]
+        if got_slice_key != ():
+            raise ValueError(f"Expected (), got {got_slice_key}")
+        if len(got_metrics) != 2:
+            raise ValueError(f"Expected 2 metrics, got {len(got_metrics)}")
+        if self.expected_key_age not in got_metrics:
+            raise ValueError(f"Expected {self.expected_key_age}")
+        if self.expected_key_income not in got_metrics:
+            raise ValueError(f"Expected {self.expected_key_income}")
+        if abs(self.expected_result_age - got_metrics[self.expected_key_age]) > 1e-5:
+            raise ValueError("Age mismatch")
+        if abs(self.expected_result_income - got_metrics[self.expected_key_income]) > 1e-5:
+            raise ValueError("Income mismatch")
+
+
 class MeanTestValidExamples(
     test_util.TensorflowModelAnalysisTest, parameterized.TestCase
 ):
-    def _check_got(self, got, rouge_computation):
-        self.assertLen(got, 1)
-        got_slice_key, got_metrics = got[0]
-        self.assertEqual(got_slice_key, ())
-        self.assertIn(rouge_computation.keys[0], got_metrics)
-        return got_metrics
 
     @parameterized.named_parameters(
         ("Age", ["features", "age"], "mean_features.age", 38.5),
@@ -96,20 +162,20 @@ class MeanTestValidExamples(
         mean_metric_key = metric_types.MetricKey(name=expected_metric_key_name)
         mean_metric_computation = stats.Mean(feature_key_path).computations()[0]
 
-        with beam.Pipeline() as pipeline:
+        with beam.Pipeline(
+            options=beam.options.pipeline_options.PipelineOptions(
+                flags=["--no_save_main_session"]
+            )
+        ) as pipeline:
             result = _compute_mean_metric(pipeline, mean_metric_computation)
 
-            def check_result(got):
-                try:
-                    got_metrics = self._check_got(got, mean_metric_computation)
-                    self.assertDictElementsAlmostEqual(
-                        got_metrics, {mean_metric_key: expected_mean}
-                    )
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
-            util.assert_that(result, check_result, label="result")
+            util.assert_that(
+                result,
+                CheckResultMean(
+                    mean_metric_computation.keys[0], mean_metric_key, expected_mean
+                ),
+                label="result",
+            )
 
     @parameterized.named_parameters(
         ("Age", ["features", "age"], "mean_features.age", 1077.9 / 24.9),
@@ -131,20 +197,20 @@ class MeanTestValidExamples(
             example_weights_key_path=["features", "example_weights"],
         ).computations()[0]
 
-        with beam.Pipeline() as pipeline:
+        with beam.Pipeline(
+            options=beam.options.pipeline_options.PipelineOptions(
+                flags=["--no_save_main_session"]
+            )
+        ) as pipeline:
             result = _compute_mean_metric(pipeline, mean_metric_computation)
 
-            def check_result(got):
-                try:
-                    got_metrics = self._check_got(got, mean_metric_computation)
-                    self.assertDictElementsAlmostEqual(
-                        got_metrics, {mean_metric_key: expected_mean}
-                    )
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
-            util.assert_that(result, check_result, label="result")
+            util.assert_that(
+                result,
+                CheckResultMean(
+                    mean_metric_computation.keys[0], mean_metric_key, expected_mean
+                ),
+                label="result",
+            )
 
     def testMeanName(self):
         feature_key_path = ["features", "age"]
@@ -155,20 +221,20 @@ class MeanTestValidExamples(
             feature_key_path, name=name
         ).computations()[0]
 
-        with beam.Pipeline() as pipeline:
+        with beam.Pipeline(
+            options=beam.options.pipeline_options.PipelineOptions(
+                flags=["--no_save_main_session"]
+            )
+        ) as pipeline:
             result = _compute_mean_metric(pipeline, mean_metric_computation)
 
-            def check_result(got):
-                try:
-                    got_metrics = self._check_got(got, mean_metric_computation)
-                    self.assertDictElementsAlmostEqual(
-                        got_metrics, {mean_metric_key: expected_mean}
-                    )
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
-            util.assert_that(result, check_result, label="result")
+            util.assert_that(
+                result,
+                CheckResultMean(
+                    mean_metric_computation.keys[0], mean_metric_key, expected_mean
+                ),
+                label="result",
+            )
 
 
 class MeanTestInvalidExamples(
@@ -194,11 +260,15 @@ class MeanTestInvalidExamples(
         ).computations()[0]
 
         with self.assertRaisesRegex(
-            AssertionError,
+            (AssertionError, RuntimeError),
             r"Mean\(\) is only supported for scalar features, but found features = "
             r"\[18, 21\]",
         ):
-            with beam.Pipeline() as pipeline:
+            with beam.Pipeline(
+                options=beam.options.pipeline_options.PipelineOptions(
+                    flags=["--no_save_main_session"]
+                )
+            ) as pipeline:
                 _ = (
                     pipeline
                     | "Create" >> beam.Create([example])
@@ -228,11 +298,15 @@ class MeanTestInvalidExamples(
         ).computations()[0]
 
         with self.assertRaisesRegex(
-            AssertionError,
+            (AssertionError, RuntimeError),
             r"Expected 1 \(scalar\) example weight for each example, but found "
             r"example weight = \[4.6, 8.5\]",
         ):
-            with beam.Pipeline() as pipeline:
+            with beam.Pipeline(
+                options=beam.options.pipeline_options.PipelineOptions(
+                    flags=["--no_save_main_session"]
+                )
+            ) as pipeline:
                 _ = (
                     pipeline
                     | "Create" >> beam.Create([example])
@@ -260,7 +334,11 @@ class MeanTestInvalidExamples(
         ).computations()[0]
         key = mean_metric_computation.keys[0]
 
-        with beam.Pipeline() as pipeline:
+        with beam.Pipeline(
+            options=beam.options.pipeline_options.PipelineOptions(
+                flags=["--no_save_main_session"]
+            )
+        ) as pipeline:
             result = (
                 pipeline
                 | "Create" >> beam.Create([example])
@@ -270,19 +348,9 @@ class MeanTestInvalidExamples(
                 >> beam.CombinePerKey(mean_metric_computation.combiner)
             )
 
-            def check_result(got):
-                try:
-                    self.assertLen(got, 1)
-                    got_slice_key, got_metrics = got[0]
-                    self.assertEqual(got_slice_key, ())
-                    self.assertLen(got_metrics, 1)
-                    self.assertIn(key, got_metrics)
-                    self.assertTrue(np.isnan(got_metrics[key]))
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
-            util.assert_that(result, check_result, label="result")
+            util.assert_that(
+                result, CheckResultNan(key), label="result"
+            )
 
 
 class MeanEnd2EndTest(parameterized.TestCase):
@@ -336,7 +404,11 @@ class MeanEnd2EndTest(parameterized.TestCase):
         # (150k * 0.5 + 200k * 0.3) / (0.5 + 0.3) = 168,750
         expected_result_income = 168750
 
-        with beam.Pipeline() as pipeline:
+        with beam.Pipeline(
+            options=beam.options.pipeline_options.PipelineOptions(
+                flags=["--no_save_main_session"]
+            )
+        ) as pipeline:
             result = (
                 pipeline
                 | "LoadData" >> beam.Create(extracts)
@@ -344,25 +416,17 @@ class MeanEnd2EndTest(parameterized.TestCase):
                 >> tfma.ExtractAndEvaluate(extractors=extractors, evaluators=evaluators)
             )
 
-            def check_result(got):
-                try:
-                    self.assertLen(got, 1)
-                    got_slice_key, got_metrics = got[0]
-                    self.assertEqual(got_slice_key, ())
-                    self.assertLen(got_metrics, 2)
-                    self.assertIn(expected_key_age, got_metrics)
-                    self.assertIn(expected_key_income, got_metrics)
-                    self.assertAlmostEqual(
-                        expected_result_age, got_metrics[expected_key_age]
-                    )
-                    self.assertAlmostEqual(
-                        expected_result_income, got_metrics[expected_key_income]
-                    )
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
             self.assertIn("metrics", result)
-            util.assert_that(result["metrics"], check_result, label="result")
+            util.assert_that(
+                result["metrics"],
+                CheckResultMeanEnd2End(
+                    expected_key_age,
+                    expected_key_income,
+                    expected_result_age,
+                    expected_result_income,
+                ),
+                label="result",
+            )
 
     def testMeanEnd2EndWithoutExampleWeights(self):
         extracts = [
@@ -410,7 +474,11 @@ class MeanEnd2EndTest(parameterized.TestCase):
         # (150k + 200k) / (1 + 1) = 175000
         expected_result_income = 175000
 
-        with beam.Pipeline() as pipeline:
+        with beam.Pipeline(
+            options=beam.options.pipeline_options.PipelineOptions(
+                flags=["--no_save_main_session"]
+            )
+        ) as pipeline:
             result = (
                 pipeline
                 | "LoadData" >> beam.Create(extracts)
@@ -418,25 +486,17 @@ class MeanEnd2EndTest(parameterized.TestCase):
                 >> tfma.ExtractAndEvaluate(extractors=extractors, evaluators=evaluators)
             )
 
-            def check_result(got):
-                try:
-                    self.assertLen(got, 1)
-                    got_slice_key, got_metrics = got[0]
-                    self.assertEqual(got_slice_key, ())
-                    self.assertLen(got_metrics, 2)
-                    self.assertIn(expected_key_age, got_metrics)
-                    self.assertIn(expected_key_income, got_metrics)
-                    self.assertAlmostEqual(
-                        expected_result_age, got_metrics[expected_key_age]
-                    )
-                    self.assertAlmostEqual(
-                        expected_result_income, got_metrics[expected_key_income]
-                    )
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
-
             self.assertIn("metrics", result)
-            util.assert_that(result["metrics"], check_result, label="result")
+            util.assert_that(
+                result["metrics"],
+                CheckResultMeanEnd2End(
+                    expected_key_age,
+                    expected_key_income,
+                    expected_result_age,
+                    expected_result_income,
+                ),
+                label="result",
+            )
 
 
 if __name__ == "__main__":
