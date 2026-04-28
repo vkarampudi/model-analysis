@@ -83,7 +83,7 @@ def update_fpl_features(
         ):
             value = np.array([value])
         updated_features[key] = {_ENCODING_NODE_SUFFIX: value}
-        
+
     return types.FeaturesPredictionsLabels(
         features=updated_features,
         labels=fpl.labels,

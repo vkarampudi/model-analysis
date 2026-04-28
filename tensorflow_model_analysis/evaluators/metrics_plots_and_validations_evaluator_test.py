@@ -45,6 +45,10 @@ from tensorflow_model_analysis.metrics import (
     confusion_matrix_plot,
     metric_specs,
     metric_types,
+    multi_class_confusion_matrix_plot,
+    rouge,
+    standard_metrics,
+    stats,
 )
 from tensorflow_model_analysis.proto import config_pb2, validation_result_pb2
 from tensorflow_model_analysis.utils import test_util as testutil
@@ -52,9 +56,8 @@ from tensorflow_model_analysis.utils import util as tfma_util
 from tensorflow_model_analysis.utils.keras_lib import tf_keras
 
 _TF_MAJOR_VERSION = int(tf.version.VERSION.split(".")[0])
+_TF_MINOR_VERSION = int(tf.version.VERSION.split(".")[1])
 
-
-from tensorflow_model_analysis.api import types
 
 def _is_close(actual, expected):
     if isinstance(actual, types.ValueWithTDistribution):

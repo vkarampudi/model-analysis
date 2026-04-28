@@ -103,10 +103,11 @@ class CheckResultMean:
             raise ValueError(f"Expected {self.computation_key} in metrics")
         if self.expected_metric_key not in got_metrics:
             raise ValueError(f"Expected {self.expected_metric_key} in metrics")
-        
+
         got_mean = got_metrics[self.expected_metric_key]
         if abs(got_mean - self.expected_mean) > 1e-5:
             raise ValueError(f"Expected mean {self.expected_mean}, got {got_mean}")
+
 
 class CheckResultNan:
     def __init__(self, key):

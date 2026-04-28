@@ -13,11 +13,12 @@
 # limitations under the License.
 """Tests for tensorflow_model_analysis.google.extractors.sql_slice_key_extractor."""
 
+import unittest
+
 import apache_beam as beam
 import numpy as np
 import pyarrow as pa
 import tensorflow as tf
-import unittest
 from apache_beam.testing import util
 from google.protobuf import text_format
 from tensorflow_metadata.proto.v0 import schema_pb2

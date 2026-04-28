@@ -53,8 +53,10 @@ class CheckResult:
         if got_slice_key != ():
             raise ValueError(f"Expected slice_key to be (), got {got_slice_key}")
         if self.rouge_computation.keys[0] not in got_metrics:
-            raise ValueError(f"Expected {self.rouge_computation.keys[0]} in got_metrics")
-        
+            raise ValueError(
+                f"Expected {self.rouge_computation.keys[0]} in got_metrics"
+            )
+
         got_name = next(iter(got_metrics.keys())).name
         if got_name != self.expected_name:
             raise ValueError(f"Expected name {self.expected_name}, got {got_name}")
@@ -154,7 +156,8 @@ class RougeTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
         }
         rouge_computation = rouge.Rouge(rouge_type).computations()[0]
         with self.assertRaisesRegex(
-            (ValueError, RuntimeError), "(Invalid rouge type|rougen requires positive n)"
+            (ValueError, RuntimeError),
+            "(Invalid rouge type|rougen requires positive n)",
         ):
             with beam.Pipeline() as pipeline:
                 _get_result(

@@ -28,7 +28,7 @@ from tensorflow_model_analysis.slicer import slicer_lib as slicer
 from tensorflow_model_analysis.utils import test_util
 
 
-class CheckMetaFeaturesResult(object):
+class CheckMetaFeaturesResult:
 
     def __call__(self, got):
         if len(got) != 2:
@@ -51,7 +51,7 @@ class CheckMetaFeaturesResult(object):
                 raise ValueError("Expected %s, got %s" % (expected, actual))
 
 
-class CheckSliceOnMetaFeatureResult(object):
+class CheckSliceOnMetaFeatureResult:
 
     def __call__(self, got):
         if len(got) != 4:

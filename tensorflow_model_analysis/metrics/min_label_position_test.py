@@ -30,7 +30,7 @@ from tensorflow_model_analysis.utils import test_util
 from tensorflow_model_analysis.utils import util as tfma_util
 
 
-class CheckMinLabelPositionResult(object):
+class CheckMinLabelPositionResult:
 
     def __init__(self, metric, label_key):
         self._metric = metric
@@ -55,7 +55,7 @@ class CheckMinLabelPositionResult(object):
             raise ValueError("Expected %s, got %s" % (expected, got_metrics[key]))
 
 
-class CheckMinLabelPositionNanResult(object):
+class CheckMinLabelPositionNanResult:
 
     def __call__(self, got):
         if len(got) != 1:

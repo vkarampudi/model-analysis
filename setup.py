@@ -319,13 +319,13 @@ setup_args = {
     "install_requires": [
         # Sort alphabetically
         "absl-py>=0.9,<2.0.0",
-        'apache-beam[gcp]>=2.53,<3',
+        "apache-beam[gcp]>=2.53,<3",
         "ipython>=7,<8",
         "ipywidgets>=7,<8",
         "numpy>=1.23.5",
         "pandas>=1.0,<2",
         "pillow>=9.4.0",
-        'protobuf>=6.31.1',
+        "protobuf>=6.31.1",
         "pyarrow>14",
         "rouge-score>=0.1.2,<2",
         "sacrebleu>=2.3,<4",
@@ -346,7 +346,6 @@ setup_args = {
             git_master="@git+https://github.com/vkarampudi/tfx-bsl@testing",
         ),
         "tf-keras",
-
     ],
     "extras_require": {
         "all": [*_make_extra_packages_tfjs(), *_make_docs_packages()],
