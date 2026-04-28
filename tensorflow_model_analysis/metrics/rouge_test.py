@@ -143,6 +143,7 @@ class CheckResultScoresE2E:
             raise ValueError("Recall mismatch")
         if abs(got_metrics[self.rouge_key].fmeasure - expected_fmeasure) > 1e-7:
             raise ValueError("F-measure mismatch")
+
 class RougeTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
 
     @parameterized.parameters(["rougen", "rouge0", "rouge10"])

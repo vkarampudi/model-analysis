@@ -916,6 +916,7 @@ class ModelUtilTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCas
             iter(extract_key_and_signature_names.items())
         )
         from apache_beam.options.pipeline_options import PipelineOptions
+
         options = PipelineOptions(flags=["--no_save_main_session"])
         with beam.Pipeline(options=options) as pipeline:
             # pylint: disable=no-value-for-parameter
@@ -977,9 +978,11 @@ class ModelUtilTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCas
         ]
 
         with self.assertRaisesRegex(
-            (ValueError, RuntimeError), "First dimension does not correspond with batch size."
+            (ValueError, RuntimeError),
+            "First dimension does not correspond with batch size.",
         ):
             from apache_beam.options.pipeline_options import PipelineOptions
+
             options = PipelineOptions(flags=["--no_save_main_session"])
             with beam.Pipeline(options=options) as pipeline:
                 # pylint: disable=no-value-for-parameter

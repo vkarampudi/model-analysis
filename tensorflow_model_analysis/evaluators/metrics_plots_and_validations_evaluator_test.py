@@ -26,8 +26,7 @@ from tensorflow_metadata.proto.v0 import schema_pb2
 from tfx_bsl.tfxio import tensor_adapter, test_util
 
 from tensorflow_model_analysis import constants
-from tensorflow_model_analysis.api import model_eval_lib
-from tensorflow_model_analysis.api import types
+from tensorflow_model_analysis.api import model_eval_lib, types
 from tensorflow_model_analysis.evaluators import metrics_plots_and_validations_evaluator
 from tensorflow_model_analysis.extractors import (
     example_weights_extractor,
@@ -46,10 +45,6 @@ from tensorflow_model_analysis.metrics import (
     confusion_matrix_plot,
     metric_specs,
     metric_types,
-    multi_class_confusion_matrix_plot,
-    rouge,
-    standard_metrics,
-    stats,
 )
 from tensorflow_model_analysis.proto import config_pb2, validation_result_pb2
 from tensorflow_model_analysis.utils import test_util as testutil
@@ -82,9 +77,7 @@ def _check_metrics_keras_diff(
             )
         if not _is_close(got_metrics.get(label_key), 0):
             raise ValueError(f"Unexpected label_key: {got_metrics.get(label_key)}")
-        if not _is_close(
-            got_metrics.get(prediction_key), expected_prediction_value
-        ):
+        if not _is_close(got_metrics.get(prediction_key), expected_prediction_value):
             raise ValueError(
                 f"Unexpected prediction_key: {got_metrics.get(prediction_key)}, expected {expected_prediction_value}"
             )
@@ -141,9 +134,7 @@ def _check_cross_slice_keys(expected_slice_keys):
         if len(expected_slice_keys) != len(actual_slice_keys) or set(
             expected_slice_keys
         ) != set(actual_slice_keys):
-            raise ValueError(
-                f"Expected {expected_slice_keys}, got {actual_slice_keys}"
-            )
+            raise ValueError(f"Expected {expected_slice_keys}, got {actual_slice_keys}")
 
     return check_result
 

@@ -29,7 +29,6 @@ from tensorflow_model_analysis.utils import test_util
 
 
 class CheckMetaFeaturesResult:
-
     def __call__(self, got):
         if len(got) != 2:
             raise ValueError("Expected 2 results, got %s" % got)
@@ -52,7 +51,6 @@ class CheckMetaFeaturesResult:
 
 
 class CheckSliceOnMetaFeatureResult:
-
     def __call__(self, got):
         if len(got) != 4:
             raise ValueError("Expected 4 results, got %s" % got)
