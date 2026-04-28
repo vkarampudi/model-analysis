@@ -20,17 +20,19 @@ DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n7tensorflow_model_
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'tensorflow_model_analysis.proto.validation_result_pb2', _globals)
-if _descriptor._USE_C_DESCRIPTORS == False:
-  DESCRIPTOR._options = None
-  _globals['_VALIDATIONFAILURE']._serialized_start=190
-  _globals['_VALIDATIONFAILURE']._serialized_end=416
-  _globals['_SLICINGDETAILS']._serialized_start=419
-  _globals['_SLICINGDETAILS']._serialized_end=625
-  _globals['_VALIDATIONDETAILS']._serialized_start=627
-  _globals['_VALIDATIONDETAILS']._serialized_end=714
-  _globals['_METRICSVALIDATIONFORSLICE']._serialized_start=717
-  _globals['_METRICSVALIDATIONFORSLICE']._serialized_end=954
-  _globals['_VALIDATIONRESULT']._serialized_start=957
-  _globals['_VALIDATIONRESULT']._serialized_end=1353
+_builder.BuildTopDescriptorsAndMessages(
+    DESCRIPTOR, "tensorflow_model_analysis.proto.validation_result_pb2", _globals
+)
+if not _descriptor._USE_C_DESCRIPTORS:
+    DESCRIPTOR._options = None
+    _globals["_VALIDATIONFAILURE"]._serialized_start = 190
+    _globals["_VALIDATIONFAILURE"]._serialized_end = 416
+    _globals["_SLICINGDETAILS"]._serialized_start = 419
+    _globals["_SLICINGDETAILS"]._serialized_end = 625
+    _globals["_VALIDATIONDETAILS"]._serialized_start = 627
+    _globals["_VALIDATIONDETAILS"]._serialized_end = 714
+    _globals["_METRICSVALIDATIONFORSLICE"]._serialized_start = 717
+    _globals["_METRICSVALIDATIONFORSLICE"]._serialized_end = 954
+    _globals["_VALIDATIONRESULT"]._serialized_start = 957
+    _globals["_VALIDATIONRESULT"]._serialized_end = 1353
 # @@protoc_insertion_point(module_scope)

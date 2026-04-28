@@ -591,11 +591,15 @@ class AUC(ConfusionMatrixMetricBase):
         # Set `x` and `y` values for the curves based on `curve` config.
         recall = np.divide(tp, tp + fn, out=np.zeros_like(tp), where=(tp + fn) != 0)
         if curve == AUCCurve.ROC:
-            fp_rate = np.divide(fp, fp + tn, out=np.zeros_like(fp), where=(fp + tn) != 0)
+            fp_rate = np.divide(
+                fp, fp + tn, out=np.zeros_like(fp), where=(fp + tn) != 0
+            )
             x = fp_rate
             y = recall
         elif curve == AUCCurve.PR:
-            precision = np.divide(tp, tp + fp, out=np.zeros_like(tp), where=(tp + fp) != 0)
+            precision = np.divide(
+                tp, tp + fp, out=np.zeros_like(tp), where=(tp + fp) != 0
+            )
             x = recall
             y = precision
 

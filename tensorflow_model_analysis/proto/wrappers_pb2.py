@@ -19,9 +19,11 @@ DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n.tensorflow_model_
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'tensorflow_model_analysis.proto.wrappers_pb2', _globals)
-if _descriptor._USE_C_DESCRIPTORS == False:
-  DESCRIPTOR._options = None
-  _globals['_MYMESSAGE']._serialized_start=110
-  _globals['_MYMESSAGE']._serialized_end=550
+_builder.BuildTopDescriptorsAndMessages(
+    DESCRIPTOR, "tensorflow_model_analysis.proto.wrappers_pb2", _globals
+)
+if not _descriptor._USE_C_DESCRIPTORS:
+    DESCRIPTOR._options = None
+    _globals["_MYMESSAGE"]._serialized_start = 110
+    _globals["_MYMESSAGE"]._serialized_end = 550
 # @@protoc_insertion_point(module_scope)
