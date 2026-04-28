@@ -118,12 +118,16 @@ def _check_metrics_keras_ingraph(
             raise ValueError(f"Expected 1 result, got {len(got)}")
         got_slice_key, got_metrics = got[0]
         if got_slice_key != ():
-             raise ValueError(f"Expected empty slice key, got {got_slice_key}")
+            raise ValueError(f"Expected empty slice key, got {got_slice_key}")
         if binary_accuracy_key not in got_metrics:
-            raise ValueError(f"binary_accuracy_key {binary_accuracy_key} not in results")
+            raise ValueError(
+                f"binary_accuracy_key {binary_accuracy_key} not in results"
+            )
         for k, v in expected_values.items():
             if not np.isclose(got_metrics[k], v):
-                 raise ValueError(f"Unexpected value for {k}: {got_metrics[k]}, expected {v}")
+                raise ValueError(
+                    f"Unexpected value for {k}: {got_metrics[k]}, expected {v}"
+                )
 
     return check_metrics
 

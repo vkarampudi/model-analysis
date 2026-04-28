@@ -63,7 +63,8 @@ class CheckSliceOnMetaFeatureResult:
         actual_slice_keys = sorted(slice_key for slice_key, _ in got)
         if actual_slice_keys != sorted(expected_slice_keys):
             raise ValueError(
-                "Expected slice keys %s, got %s" % (expected_slice_keys, actual_slice_keys)
+                "Expected slice keys %s, got %s"
+                % (expected_slice_keys, actual_slice_keys)
             )
 
 
@@ -135,7 +136,9 @@ class MetaFeatureExtractorTest(test_util.TensorflowModelAnalysisTest):
         def bad_meta_feature_fn(_):
             return {"interest": ["bad", "key"]}
 
-        with self.assertRaisesRegex(Exception, "Modification of existing keys is not allowed"):
+        with self.assertRaisesRegex(
+            Exception, "Modification of existing keys is not allowed"
+        ):
             with beam.Pipeline() as pipeline:
                 fpls = create_fpls()
 

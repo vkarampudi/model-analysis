@@ -124,8 +124,15 @@ class CheckResultNan:
         if not np.isnan(got_metrics[self.key]):
             raise ValueError(f"Expected NaN, got {got_metrics[self.key]}")
 
+
 class CheckResultMeanEnd2End:
-    def __init__(self, expected_key_age, expected_key_income, expected_result_age, expected_result_income):
+    def __init__(
+        self,
+        expected_key_age,
+        expected_key_income,
+        expected_result_age,
+        expected_result_income,
+    ):
         self.expected_key_age = expected_key_age
         self.expected_key_income = expected_key_income
         self.expected_result_age = expected_result_age
@@ -145,14 +152,16 @@ class CheckResultMeanEnd2End:
             raise ValueError(f"Expected {self.expected_key_income}")
         if abs(self.expected_result_age - got_metrics[self.expected_key_age]) > 1e-5:
             raise ValueError("Age mismatch")
-        if abs(self.expected_result_income - got_metrics[self.expected_key_income]) > 1e-5:
+        if (
+            abs(self.expected_result_income - got_metrics[self.expected_key_income])
+            > 1e-5
+        ):
             raise ValueError("Income mismatch")
 
 
 class MeanTestValidExamples(
     test_util.TensorflowModelAnalysisTest, parameterized.TestCase
 ):
-
     @parameterized.named_parameters(
         ("Age", ["features", "age"], "mean_features.age", 38.5),
         ("Income", ["features", "income"], "mean_features.income", 212500),
@@ -349,9 +358,7 @@ class MeanTestInvalidExamples(
                 >> beam.CombinePerKey(mean_metric_computation.combiner)
             )
 
-            util.assert_that(
-                result, CheckResultNan(key), label="result"
-            )
+            util.assert_that(result, CheckResultNan(key), label="result")
 
 
 class MeanEnd2EndTest(parameterized.TestCase):

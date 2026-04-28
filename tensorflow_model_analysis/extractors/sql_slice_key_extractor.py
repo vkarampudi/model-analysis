@@ -20,6 +20,7 @@ from typing import List, Mapping
 import apache_beam as beam
 import pyarrow as pa
 import tensorflow as tf
+
 try:
     from tfx_bsl.arrow import sql_util
 except ImportError:

@@ -61,8 +61,17 @@ class CheckResult:
         if got_name != self.expected_name:
             raise ValueError(f"Expected name {self.expected_name}, got {got_name}")
 
+
 class CheckResultScores:
-    def __init__(self, rouge_key, rouge_computation, expected_precision, expected_recall, expected_fmeasure, places=None):
+    def __init__(
+        self,
+        rouge_key,
+        rouge_computation,
+        expected_precision,
+        expected_recall,
+        expected_fmeasure,
+        places=None,
+    ):
         self.rouge_key = rouge_key
         self.rouge_computation = rouge_computation
         self.expected_precision = expected_precision
@@ -83,11 +92,18 @@ class CheckResultScores:
 
         delta = 10**-self.places if self.places else 1e-7
         if abs(got_precision - self.expected_precision) > delta:
-            raise ValueError(f"Precision mismatch: expected {self.expected_precision}, got {got_precision}")
+            raise ValueError(
+                f"Precision mismatch: expected {self.expected_precision}, got {got_precision}"
+            )
         if abs(got_recall - self.expected_recall) > delta:
-            raise ValueError(f"Recall mismatch: expected {self.expected_recall}, got {got_recall}")
+            raise ValueError(
+                f"Recall mismatch: expected {self.expected_recall}, got {got_recall}"
+            )
         if abs(got_fmeasure - self.expected_fmeasure) > delta:
-            raise ValueError(f"F-measure mismatch: expected {self.expected_fmeasure}, got {got_fmeasure}")
+            raise ValueError(
+                f"F-measure mismatch: expected {self.expected_fmeasure}, got {got_fmeasure}"
+            )
+
 
 class CheckResultNan:
     def __init__(self, rouge_key, rouge_computation):
@@ -108,8 +124,11 @@ class CheckResultNan:
         if not np.isnan(got_metrics[self.rouge_key].fmeasure):
             raise ValueError("Expected NaN fmeasure")
 
+
 class CheckResultScoresE2E:
-    def __init__(self, rouge_key, rouge_type, expected_unweighted_scores, example_weights):
+    def __init__(
+        self, rouge_key, rouge_type, expected_unweighted_scores, example_weights
+    ):
         self.rouge_key = rouge_key
         self.rouge_type = rouge_type
         self.expected_unweighted_scores = expected_unweighted_scores
@@ -144,8 +163,8 @@ class CheckResultScoresE2E:
         if abs(got_metrics[self.rouge_key].fmeasure - expected_fmeasure) > 1e-7:
             raise ValueError("F-measure mismatch")
 
-class RougeTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
 
+class RougeTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase):
     @parameterized.parameters(["rougen", "rouge0", "rouge10"])
     def testInvalidRougeTypes(self, rouge_type):
         target_text = "testing one two"

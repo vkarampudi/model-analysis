@@ -267,7 +267,9 @@ class SqlSliceKeyExtractorTest(test_util.TensorflowModelAnalysisTest):
 
             # pylint: enable=no-value-for-parameter
 
-            util.assert_that(result, self._check_testSqlSliceKeyExtractorWithCrossSlices)
+            util.assert_that(
+                result, self._check_testSqlSliceKeyExtractorWithCrossSlices
+            )
 
     def _check_testSqlSliceKeyExtractorWithCrossSlices(self, got):
         try:
@@ -341,7 +343,9 @@ class SqlSliceKeyExtractorTest(test_util.TensorflowModelAnalysisTest):
 
             # pylint: enable=no-value-for-parameter
 
-            util.assert_that(result, self._check_testSqlSliceKeyExtractorWithEmptySqlConfig)
+            util.assert_that(
+                result, self._check_testSqlSliceKeyExtractorWithEmptySqlConfig
+            )
 
     def _check_testSqlSliceKeyExtractorWithEmptySqlConfig(self, got):
         try:
@@ -416,7 +420,9 @@ class SqlSliceKeyExtractorTest(test_util.TensorflowModelAnalysisTest):
 
             # pylint: enable=no-value-for-parameter
 
-            util.assert_that(result, self._check_testSqlSliceKeyExtractorWithMultipleSchema)
+            util.assert_that(
+                result, self._check_testSqlSliceKeyExtractorWithMultipleSchema
+            )
 
     def _check_testSqlSliceKeyExtractorWithMultipleSchema(self, got):
         try:
