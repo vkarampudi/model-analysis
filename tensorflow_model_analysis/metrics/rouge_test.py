@@ -76,7 +76,7 @@ class CheckResultScores:
         got_slice_key, got_metrics = got[0]
         if got_slice_key != ():
             raise ValueError(f"Expected slice_key to be (), got {got_slice_key}")
-        
+
         got_precision = got_metrics[self.rouge_key].precision
         got_recall = got_metrics[self.rouge_key].recall
         got_fmeasure = got_metrics[self.rouge_key].fmeasure
@@ -100,7 +100,7 @@ class CheckResultNan:
         got_slice_key, got_metrics = got[0]
         if got_slice_key != ():
             raise ValueError(f"Expected slice_key to be (), got {got_slice_key}")
-        
+
         if not np.isnan(got_metrics[self.rouge_key].precision):
             raise ValueError("Expected NaN precision")
         if not np.isnan(got_metrics[self.rouge_key].recall):
