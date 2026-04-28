@@ -364,28 +364,19 @@ def top_k_indices(
 
     if len(scores.shape) == 1:
         # 1D data
-        indices = np.argpartition(scores, -top_k)[-top_k:]
-        if sort:
-            indices = indices[np.argsort(-scores[indices])]
+        # To ensure deterministic behavior in the presence of ties, we use argsort
+        # with kind='stable'.
+        indices = np.argsort(-scores, kind="stable")[:top_k]
         return indices
     elif len(scores.shape) == 2:
         # 2D data
-        indices = np.argpartition(scores, -top_k, axis=-1)[:, -top_k:]
-        # The above creates an n x top_k matrix where each row in indices matches
-        # the corresponding row in scores. For example:
-        #   [
-        #      [<row1_top_k_index_1>, <row_1_top_k_index_2>, ...],
-        #      [<row2_top_k_index_1>, <row_2_top_k_index_2>, ...],
-        #      ...
-        #   ]
-        # However numpy indexing wants the index to be be a 2-tuple of where the
-        # first tuple value contains the row indices (repeated top k times for each
-        # row) and the second tuple value contains the column values.
-        #   (row1, row1, ..., row2, ...), (row1_top_k_index1, row1_top_index_2,...)
-        if sort:
-            for i in range(indices.shape[0]):
-                indices[i] = indices[i][np.argsort(-scores[i][indices[i]])]
-        return np.arange(indices.shape[0]).repeat(top_k), indices.flatten()
+        # To ensure deterministic behavior in the presence of ties, we use argsort
+        # with kind='stable' along the last axis.
+        indices = np.argsort(-scores, axis=-1, kind="stable")[:, :top_k]
+        # For 2D data, TFMA expects a return value that can be used to index the
+        # array directly. This is a tuple of (row_indices, col_indices).
+        num_rows = scores.shape[0]
+        return np.arange(num_rows).repeat(top_k), indices.flatten()
     else:
         raise NotImplementedError(
             f"top_k not supported for shapes > 2: scores = {scores}"
