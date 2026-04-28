@@ -18,11 +18,11 @@
     *   Replaced nested closures with module-level classes (e.g., `CheckResult`, `CheckResultMean`) to ensure full serializability for `PrismRunner` on Python 3.13.
     *   Removed `self` (test instance) capture in Beam matchers to resolve `RuntimeError: Unable to pickle fn` during distributed execution.
     *   Enabled `--no_save_main_session` for all Beam pipelines in the test suite to prevent unintentional serialization of the main session and shared resources.
-*   **Beam Execution & Metrics Verification**:
-    *   Refactored `CounterUtilTest` and `model_eval_lib_test.py` to correctly capture and wait for `PipelineResult`, ensuring reliable metric retrieval across different Beam runners.
-*   **SQL Support Handlers**:
-    *   Implemented conditional skipping for SQL-dependent tests (e.g., `sql_slice_key_extractor_test.py`) in environments where SQL binary bindings are missing.
-*   **General Test Suite Improvements**:
+*   **NumPy 2.0 & Python 3.13 Compatibility**:
+    *   Standardized on safe scalar extraction by replacing `float(ndarray)` with `.item()` in attributions, calibration, and NDCG modules to comply with NumPy 2.0 requirements.
+    *   Implemented robust, warning-free division in AUC and PR AUC calculations using `np.divide` with `where` clauses.
+*   **Bug Fixes and Functional Corrections**:
+    *   Fixed a critical regression in `metric_util.py` where `SubKey(k=k)` incorrectly selected the first prediction instead of the requested k-th largest prediction.
     *   Fixed `UnparsedFlagAccessError` in `ModelSignaturesDoFn` tests by removing direct `absl.flags` access in pickling-sensitive contexts.
     *   Removed obsolete `@unittest.expectedFailure` decorators from tests that are now passing in the stabilized environment.
     *   Fixed various indentation and syntax errors in utility tests.
