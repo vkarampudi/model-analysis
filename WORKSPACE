@@ -4,14 +4,16 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 # TF 2.21.0
 # LINT.IfChange(tf_commit)
-_TENSORFLOW_GIT_COMMIT = "v2.21.0"
+_TENSORFLOW_GIT_COMMIT = "a481b10260dfdf833a1b16007eead49c1d7febf3"
 
 # LINT.ThenChange(:io_bazel_rules_closure)
 http_archive(
     name = "org_tensorflow",
-    strip_prefix = "tensorflow-%s" % "2.21.0",
+    sha256 = "ef3568bb4865d6c1b2564fb5689c19b6b9a5311572cd1f2ff9198636a8520921",
+    strip_prefix = "tensorflow-%s" % _TENSORFLOW_GIT_COMMIT,
     urls = [
-        "https://github.com/tensorflow/tensorflow/archive/refs/tags/v2.21.0.tar.gz",
+        "http://mirror.tensorflow.org/github.com/tensorflow/tensorflow/archive/%s.tar.gz" % _TENSORFLOW_GIT_COMMIT,
+        "https://github.com/tensorflow/tensorflow/archive/%s.tar.gz" % _TENSORFLOW_GIT_COMMIT,
     ],
 )
 
@@ -75,13 +77,14 @@ http_archive(
 
 load("@org_tensorflow_tensorboard//third_party:workspace.bzl", "tensorboard_workspace")
 
-_PROTOBUF_COMMIT = "v31.1"  # protobuf 6.31.1
+_PROTOBUF_COMMIT = "74211c0dfc2777318ab53c2cd2c317a2ef9012de"
 
 http_archive(
     name = "com_google_protobuf",
-    strip_prefix = "protobuf-31.1",
+    sha256 = "554e847e46c705bfc44fb2d0ae5bf78f34395fcbfd86ba747338b570eef26771",
+    strip_prefix = "protobuf-%s" % _PROTOBUF_COMMIT,
     urls = [
-        "https://github.com/protocolbuffers/protobuf/archive/refs/tags/v31.1.zip",
+        "https://github.com/protocolbuffers/protobuf/archive/%s.zip" % _PROTOBUF_COMMIT,
     ],
 )
 
