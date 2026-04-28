@@ -313,7 +313,7 @@ class _MultiClassConfusionMatrixCombiner(beam.CombineFn):
         else:
             actual_class_id = int(label)
         predicted_class_id = np.argmax(predictions)
-        example_weight = float(example_weight)
+        example_weight = np.asarray(example_weight).item()
         for threshold in self._thresholds:
             if threshold not in accumulator:
                 accumulator[threshold] = {}

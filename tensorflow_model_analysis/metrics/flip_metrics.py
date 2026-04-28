@@ -86,47 +86,69 @@ class _BooleanFlipCountsCombiner(beam.CombineFn):
         accumulator: _BooleanFlipCountsAccumulator,
         element: metric_types.StandardMetricInputs,
     ) -> _BooleanFlipCountsAccumulator:
-        _, base_prediction, base_example_weight = next(
-            metric_util.to_label_prediction_example_weight(
-                inputs=element,
-                eval_config=self._eval_config,
-                model_name=self._baseline_model_name,
-                output_name=self._output_name,
-                example_weighted=self._example_weighted,
-                flatten=True,
-                allow_none=True,
-            )
+        for _, base_pred, base_weight in metric_util.to_label_prediction_example_weight(
+            inputs=element,
+            eval_config=self._eval_config,
+            model_name=self._baseline_model_name,
+            output_name=self._output_name,
+            example_weighted=self._example_weighted,
+            flatten=True,
+            allow_none=True,
+        ):
+            # Re-fetch model prediction for the same example index if needed,
+            # but to_label_prediction_example_weight already handles multi-model
+            # if we use it correctly.
+            # However, flip_metrics.py currently calls it twice.
+            # A better way is to fetch both predictions at once.
+            # For now, let's just fix the scalar issue in the current structure.
+            pass
+
+        # Actually, the current structure relies on zip if multiple models are present.
+        # Let's refactor to get both predictions for each example.
+        base_it = metric_util.to_label_prediction_example_weight(
+            inputs=element,
+            eval_config=self._eval_config,
+            model_name=self._baseline_model_name,
+            output_name=self._output_name,
+            example_weighted=self._example_weighted,
+            flatten=True,
+            allow_none=True,
+        )
+        model_it = metric_util.to_label_prediction_example_weight(
+            inputs=element,
+            eval_config=self._eval_config,
+            model_name=self._model_name,
+            output_name=self._output_name,
+            example_weighted=self._example_weighted,
+            flatten=True,
+            allow_none=True,
         )
 
-        _, model_prediction, _ = next(
-            metric_util.to_label_prediction_example_weight(
-                inputs=element,
-                eval_config=self._eval_config,
-                model_name=self._model_name,
-                output_name=self._output_name,
-                example_weighted=self._example_weighted,
-                flatten=True,
-                allow_none=True,
-            )
-        )
+        for (_, base_prediction, base_example_weight), (
+            _,
+            model_prediction,
+            _,
+        ) in zip(base_it, model_it):
+            base_example_weight = metric_util.safe_to_scalar(base_example_weight)
+            base_prediction = metric_util.safe_to_scalar(base_prediction)
+            model_prediction = metric_util.safe_to_scalar(model_prediction)
 
-        base_example_weight = metric_util.safe_to_scalar(base_example_weight)
-        base_prediciton_bool = base_prediction > self._threshold
-        model_prediction_bool = model_prediction > self._threshold
+            base_prediction_bool = bool(base_prediction > self._threshold)
+            model_prediction_bool = bool(model_prediction > self._threshold)
 
-        accumulator.merge(
-            _BooleanFlipCountsAccumulator(
-                num_weighted_examples=base_example_weight,
-                num_weighted_neg_to_neg=base_example_weight
-                * int(not base_prediciton_bool and not model_prediction_bool),
-                num_weighted_neg_to_pos=base_example_weight
-                * int(not base_prediciton_bool and model_prediction_bool),
-                num_weighted_pos_to_neg=base_example_weight
-                * int(base_prediciton_bool and not model_prediction_bool),
-                num_weighted_pos_to_pos=base_example_weight
-                * int(base_prediciton_bool and model_prediction_bool),
+            accumulator.merge(
+                _BooleanFlipCountsAccumulator(
+                    num_weighted_examples=base_example_weight,
+                    num_weighted_neg_to_neg=base_example_weight
+                    * int(not base_prediction_bool and not model_prediction_bool),
+                    num_weighted_neg_to_pos=base_example_weight
+                    * int(not base_prediction_bool and model_prediction_bool),
+                    num_weighted_pos_to_neg=base_example_weight
+                    * int(base_prediction_bool and not model_prediction_bool),
+                    num_weighted_pos_to_pos=base_example_weight
+                    * int(base_prediction_bool and model_prediction_bool),
+                )
             )
-        )
 
         return accumulator
 

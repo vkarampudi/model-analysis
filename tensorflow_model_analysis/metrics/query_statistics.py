@@ -16,6 +16,7 @@
 from typing import Dict, Iterable, Optional
 
 import apache_beam as beam
+import numpy as np
 
 from tensorflow_model_analysis.metrics import metric_types, metric_util
 from tensorflow_model_analysis.proto import config_pb2
@@ -176,7 +177,7 @@ class _QueryStatisticsCombiner(beam.CombineFn):
             flatten=False,
             require_single_example_weight=True,
         ):
-            example_weight = float(example_weight)
+            example_weight = np.asarray(example_weight).item()
             accumulator.total_queries += example_weight
             num_documents = len(element.prediction) * example_weight
             accumulator.total_documents += num_documents

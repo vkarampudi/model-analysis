@@ -18,6 +18,7 @@ import operator
 from typing import Dict, Iterable, List, Optional
 
 import apache_beam as beam
+import numpy as np
 
 from tensorflow_model_analysis.metrics import metric_types, metric_util
 from tensorflow_model_analysis.proto import config_pb2
@@ -220,9 +221,9 @@ class _CalibrationHistogramCombiner(beam.CombineFn):
             class_weights=self._class_weights,
             example_weighted=self._example_weighted,
         ):
-            example_weight = example_weight.item()
-            label = label.item()
-            prediction = prediction.item()
+            example_weight = np.asarray(example_weight).item()
+            label = np.asarray(label).item()
+            prediction = np.asarray(prediction).item()
             weighted_label = label * example_weight
             weighted_prediction = prediction * example_weight
             if self._prediction_based_bucketing:

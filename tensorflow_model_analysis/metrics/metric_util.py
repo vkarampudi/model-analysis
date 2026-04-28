@@ -228,7 +228,7 @@ def to_scalar(
             f'"{tensor_name}" should have exactly 1 value, but found '
             f"{tensor.size} instead: values={tensor}"
         )
-    return tensor.item()
+    return np.asarray(tensor).item()
 
 
 def safe_to_scalar(arr: Any) -> Any:
@@ -242,7 +242,7 @@ def safe_to_scalar(arr: Any) -> Any:
         if arr.size == 0:
             return 0.0
         elif arr.size == 1:
-            return arr.item()
+            return np.asarray(arr).item()
         else:
             raise ValueError("Array should have exactly 1 value to a Python scalar")
 
@@ -367,12 +367,16 @@ def top_k_indices(
         # To ensure deterministic behavior in the presence of ties, we use argsort
         # with kind='stable'.
         indices = np.argsort(-scores, kind="stable")[:top_k]
+        if not sort:
+            indices.sort()
         return indices
     elif len(scores.shape) == 2:
         # 2D data
         # To ensure deterministic behavior in the presence of ties, we use argsort
         # with kind='stable' along the last axis.
         indices = np.argsort(-scores, axis=-1, kind="stable")[:, :top_k]
+        if not sort:
+            indices.sort(axis=-1)
         # For 2D data, TFMA expects a return value that can be used to index the
         # array directly. This is a tuple of (row_indices, col_indices).
         num_rows = scores.shape[0]
@@ -653,7 +657,7 @@ def to_label_prediction_example_weight(
         example_weight = util.to_numpy(example_weight)
         if require_single_example_weight and example_weight.size > 1:
             example_weight = example_weight.flatten()
-            if not np.all(example_weight == example_weight[0]):
+            if not np.allclose(example_weight, example_weight[0]):
                 raise ValueError(
                     "if example_weight size > 0, the values must all be the same: "
                     f"example_weight={example_weight}\n\n"
@@ -663,7 +667,7 @@ def to_label_prediction_example_weight(
 
         if sub_key is not None and label is not None and prediction is not None:
             if sub_key.k is not None:
-                indices = top_k_indices(sub_key.k, prediction)
+                indices = top_k_indices(sub_key.k, prediction, sort=True)
                 if len(prediction.shape) == 1:
                     indices = indices[sub_key.k - 1]  # 1D
                 else:
@@ -709,7 +713,7 @@ def to_label_prediction_example_weight(
         if flatten:
             if example_weight.size == 1:
                 example_weight = np.array(
-                    [example_weight.item() for i in range(flatten_size)]
+                    [np.asarray(example_weight).item() for i in range(flatten_size)]
                 )
             elif example_weight.size != flatten_size:
                 raise ValueError(
@@ -809,7 +813,7 @@ def _yield_fractional_labels(
       ValueError: If labels are not within [0, 1].
     """
     # Verify that labels are also within [0, 1]
-    if not within_interval(label.item(), 0.0, 1.0):
+    if not within_interval(np.asarray(label).item(), 0.0, 1.0):
         raise ValueError(
             f"label must be within [0, 1]: label={label}, prediction={prediction}, "
             f"example_weight={example_weight}"
@@ -818,7 +822,7 @@ def _yield_fractional_labels(
         (np.array([0], dtype=label.dtype), example_weight * (1 - label)),
         (np.array([1], dtype=label.dtype), example_weight * label),
     ):
-        if not math.isclose(w.item(), 0.0):
+        if not math.isclose(np.asarray(w).item(), 0.0):
             yield (l, prediction, w)
 
 

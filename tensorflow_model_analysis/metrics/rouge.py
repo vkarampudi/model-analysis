@@ -18,6 +18,7 @@ from typing import Dict, Iterable, Optional
 
 import apache_beam as beam
 import nltk
+import numpy as np
 from absl import logging
 from rouge_score import rouge_scorer, scoring, tokenizers
 
@@ -110,7 +111,7 @@ class RougeCombiner(beam.CombineFn):
             )
         )
 
-        example_weight = example_weights[0]
+        example_weight = np.asarray(example_weights).item()
         accumulator.weighted_count += example_weight
 
         rouge_scores = self.scorer.score_multi(labels, predictions[0])[self.rouge_type]

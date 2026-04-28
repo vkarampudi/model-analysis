@@ -16,6 +16,7 @@
 from typing import Any, Dict, Iterable, List, Optional
 
 import apache_beam as beam
+import numpy as np
 
 from tensorflow_model_analysis.metrics import metric_types, metric_util
 from tensorflow_model_analysis.proto import config_pb2
@@ -345,11 +346,11 @@ class _ClassWeightsFromLabelsCombiner(beam.CombineFn):
             allow_none=True,
             require_single_example_weight=True,
         ):
-            example_weight = float(example_weight)
+            example_weight = metric_util.safe_to_scalar(example_weight)
             if label is not None:
                 for class_id in self._class_ids:
-                    if label.size == 1:
-                        label_value = float(label.item() == class_id)
+                    if np.asarray(label).size == 1:
+                        label_value = float(np.asarray(label).item() == class_id)
                     else:
                         if class_id >= len(label):
                             raise ValueError(

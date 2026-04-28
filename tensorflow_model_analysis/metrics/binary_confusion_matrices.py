@@ -177,10 +177,31 @@ class Matrices(  # pytype: disable=signature-mismatch  # always-use-return-annot
             out=np.zeros_like(labeled_positives),
             where=(labeled_positives > 0),
         )
-        f1 = 2 * precision * recall / (precision + recall)
-        accuracy = (tp + tn) / (tp + tn + fp + fn)
-        false_positive_rate = fp / labeled_negatives
-        false_omission_rate = fn / predicated_negatives
+        f1 = np.divide(
+            2 * precision * recall,
+            precision + recall,
+            out=np.zeros_like(precision),
+            where=(precision + recall > 0),
+        )
+        total_examples = tp + tn + fp + fn
+        accuracy = np.divide(
+            tp + tn,
+            total_examples,
+            out=np.zeros_like(total_examples),
+            where=(total_examples > 0),
+        )
+        false_positive_rate = np.divide(
+            fp,
+            labeled_negatives,
+            out=np.zeros_like(labeled_negatives),
+            where=(labeled_negatives > 0),
+        )
+        false_omission_rate = np.divide(
+            fn,
+            predicated_negatives,
+            out=np.zeros_like(predicated_negatives),
+            where=(predicated_negatives > 0),
+        )
         confusion_matrix_at_thresholds_proto = result.confusion_matrix_at_thresholds
         for i, threshold in enumerate(self.thresholds):
             confusion_matrix_at_thresholds_proto.matrices.add(

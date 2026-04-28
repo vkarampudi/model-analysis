@@ -333,21 +333,21 @@ class _WeightedLabelsPredictionsExamplesCombiner(beam.CombineFn):
             example_weighted=self._example_weighted,
             allow_none=True,
         ):
-            example_weight = example_weight.item()
+            example_weight = np.asarray(example_weight).item()
             accumulator.total_weighted_examples += example_weight
             if label is not None and len(label):
                 if self._key.sub_key and self._key.sub_key.top_k is not None:
                     for i in range(self._key.sub_key.top_k):
                         weighted_label = label[i] * example_weight
                 else:
-                    weighted_label = label.item() * example_weight
+                    weighted_label = np.asarray(label).item() * example_weight
                 accumulator.total_weighted_labels += weighted_label
             if prediction is not None and len(label):
                 if self._key.sub_key and self._key.sub_key.top_k is not None:
                     for i in range(self._key.sub_key.top_k):
                         weighted_prediction = prediction[i] * example_weight
                 else:
-                    weighted_prediction = prediction.item() * example_weight
+                    weighted_prediction = np.asarray(prediction).item() * example_weight
                 accumulator.total_weighted_predictions += weighted_prediction
         return accumulator
 

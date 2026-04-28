@@ -16,6 +16,7 @@
 from typing import Dict, Iterable, Optional
 
 import apache_beam as beam
+import numpy as np
 
 from tensorflow_model_analysis.metrics import metric_types, metric_util
 from tensorflow_model_analysis.proto import config_pb2
@@ -130,7 +131,7 @@ class _SquaredPearsonCorrelationCombiner(beam.CombineFn):
             class_weights=self._class_weights,
             example_weighted=self._example_weighted,
         ):
-            example_weight = float(example_weight)
+            example_weight = np.asarray(example_weight).item()
             label = float(label)
             prediction = float(prediction)
             accumulator.total_weighted_labels += example_weight * label

@@ -204,7 +204,7 @@ class _NDCGCombiner(beam.CombineFn):
         # Ignore non-positive gains.
         if gains.max() <= 0:
             example_weight = 0.0
-        return (gains[np.argsort(predictions)[::-1]], example_weight.item())
+        return (gains[np.argsort(predictions)[::-1]], np.asarray(example_weight).item())
 
     def _calculate_dcg_at_k(self, k: int, sorted_values: List[float]) -> float:
         """Calculate the value of DCG@k.
@@ -263,7 +263,7 @@ class _NDCGCombiner(beam.CombineFn):
             accumulator.ndcg[i] += (
                 self._calculate_ndcg(rank_gain, key.sub_key.top_k) * example_weight
             )
-        accumulator.total_weighted_examples += float(example_weight)
+        accumulator.total_weighted_examples += np.asarray(example_weight).item()
         return accumulator
 
     def merge_accumulators(
