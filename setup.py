@@ -323,7 +323,7 @@ setup_args = {
         "ipython>=7,<8",
         "ipywidgets>=7,<8",
         "numpy>=1.23.5",
-        "pandas>=1.0,<2",
+        "pandas>=1.0,<3",
         "pillow>=9.4.0",
         "protobuf>=6.31.1",
         "pyarrow>14",
