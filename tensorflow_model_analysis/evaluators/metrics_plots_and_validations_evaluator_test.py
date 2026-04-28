@@ -27,6 +27,7 @@ from tfx_bsl.tfxio import tensor_adapter, test_util
 
 from tensorflow_model_analysis import constants
 from tensorflow_model_analysis.api import model_eval_lib
+from tensorflow_model_analysis.api import types
 from tensorflow_model_analysis.evaluators import metrics_plots_and_validations_evaluator
 from tensorflow_model_analysis.extractors import (
     example_weights_extractor,
@@ -52,7 +53,6 @@ from tensorflow_model_analysis.metrics import (
 )
 from tensorflow_model_analysis.proto import config_pb2, validation_result_pb2
 from tensorflow_model_analysis.utils import test_util as testutil
-from tensorflow_model_analysis.utils import util as tfma_util
 from tensorflow_model_analysis.utils.keras_lib import tf_keras
 
 _TF_MAJOR_VERSION = int(tf.version.VERSION.split(".")[0])
@@ -105,7 +105,9 @@ def _check_attributions(expected_attributions):
         actual = got_attributions[total_attributions_key]
         for k, v in expected_attributions.items():
             if not np.isclose(actual[k], v):
-                raise ValueError(f"Unexpected attribution for {k}: {actual[k]}, expected {v}")
+                raise ValueError(
+                    f"Unexpected attribution for {k}: {actual[k]}, expected {v}"
+                )
 
     return check_attributions
 
