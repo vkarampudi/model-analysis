@@ -19,8 +19,9 @@
     *   Removed `self` (test instance) capture in Beam matchers to resolve `RuntimeError: Unable to pickle fn` during distributed execution.
     *   Enabled `--no_save_main_session` for all Beam pipelines in the test suite to prevent unintentional serialization of the main session and shared resources.
 *   **NumPy 2.0 & Python 3.13 Compatibility**:
-    *   Standardized on safe scalar extraction by replacing `float(ndarray)` with `.item()` in attributions, calibration, and NDCG modules to comply with NumPy 2.0 requirements.
-    *   Implemented robust, warning-free division in AUC and PR AUC calculations using `np.divide` with `where` clauses.
+    *   Standardized on safe scalar extraction by replacing `float(ndarray)` with `.item()` or `metric_util.safe_to_scalar` in aggregation, attributions, calibration, flip metrics, and NDCG modules to resolve `TypeError` in Beam pipelines.
+    *   Fixed a batching bug in `flip_metrics.py` to correctly process all examples in a Beam batch.
+    *   Implemented robust, warning-free division in AUC, PR AUC, and confusion matrix calculations using `np.divide` with `where` clauses to prevent `RuntimeWarning`.
 *   **Bug Fixes and Functional Corrections**:
     *   Fixed a critical regression in `metric_util.py` where `SubKey(k=k)` incorrectly selected the first prediction instead of the requested k-th largest prediction.
     *   Fixed `UnparsedFlagAccessError` in `ModelSignaturesDoFn` tests by removing direct `absl.flags` access in pickling-sensitive contexts.
