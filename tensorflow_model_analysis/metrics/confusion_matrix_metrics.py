@@ -575,10 +575,11 @@ class AUC(ConfusionMatrixMetricBase):
             dp = p[: num_thresholds - 1] - p[1:]
             prec_slope = dtp / np.maximum(dp, 0)
             intercept = tp[1:] - prec_slope * p[1:]
-            safe_p_ratio = np.where(
-                np.logical_and(p[: num_thresholds - 1] > 0, p[1:] > 0),
-                p[: num_thresholds - 1] / np.maximum(p[1:], 0),
-                np.ones_like(p[1:]),
+            safe_p_ratio = np.divide(
+                p[: num_thresholds - 1],
+                p[1:],
+                out=np.ones_like(p[1:]),
+                where=p[1:] != 0,
             )
             pr_auc_increment = (
                 prec_slope
@@ -588,13 +589,13 @@ class AUC(ConfusionMatrixMetricBase):
             return np.nansum(pr_auc_increment)
 
         # Set `x` and `y` values for the curves based on `curve` config.
-        recall = tp / (tp + fn)
+        recall = np.divide(tp, tp + fn, out=np.zeros_like(tp), where=(tp + fn) != 0)
         if curve == AUCCurve.ROC:
-            fp_rate = fp / (fp + tn)
+            fp_rate = np.divide(fp, fp + tn, out=np.zeros_like(fp), where=(fp + tn) != 0)
             x = fp_rate
             y = recall
         elif curve == AUCCurve.PR:
-            precision = tp / (tp + fp)
+            precision = np.divide(tp, tp + fp, out=np.zeros_like(tp), where=(tp + fp) != 0)
             x = recall
             y = precision
 

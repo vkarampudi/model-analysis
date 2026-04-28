@@ -220,9 +220,9 @@ class _CalibrationHistogramCombiner(beam.CombineFn):
             class_weights=self._class_weights,
             example_weighted=self._example_weighted,
         ):
-            example_weight = float(example_weight)
-            label = float(label)
-            prediction = float(prediction)
+            example_weight = example_weight.item()
+            label = label.item()
+            prediction = prediction.item()
             weighted_label = label * example_weight
             weighted_prediction = prediction * example_weight
             if self._prediction_based_bucketing:

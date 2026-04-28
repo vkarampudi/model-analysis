@@ -665,10 +665,13 @@ def to_label_prediction_example_weight(
             if sub_key.k is not None:
                 indices = top_k_indices(sub_key.k, prediction)
                 if len(prediction.shape) == 1:
-                    indices = indices[0]  # 1D
+                    indices = indices[sub_key.k - 1]  # 1D
                 else:
                     # 2D, take kth values
-                    indices = (indices[0][0 :: sub_key.k], indices[1][0 :: sub_key.k])
+                    indices = (
+                        indices[0][sub_key.k - 1 :: sub_key.k],
+                        indices[1][sub_key.k - 1 :: sub_key.k],
+                    )
                 if label.shape != prediction.shape:
                     label = one_hot(label, prediction)
                 label = select_indices(label, indices)
@@ -706,7 +709,7 @@ def to_label_prediction_example_weight(
         if flatten:
             if example_weight.size == 1:
                 example_weight = np.array(
-                    [float(example_weight) for i in range(flatten_size)]
+                    [example_weight.item() for i in range(flatten_size)]
                 )
             elif example_weight.size != flatten_size:
                 raise ValueError(
@@ -806,7 +809,7 @@ def _yield_fractional_labels(
       ValueError: If labels are not within [0, 1].
     """
     # Verify that labels are also within [0, 1]
-    if not within_interval(float(label), 0.0, 1.0):
+    if not within_interval(label.item(), 0.0, 1.0):
         raise ValueError(
             f"label must be within [0, 1]: label={label}, prediction={prediction}, "
             f"example_weight={example_weight}"
@@ -815,7 +818,7 @@ def _yield_fractional_labels(
         (np.array([0], dtype=label.dtype), example_weight * (1 - label)),
         (np.array([1], dtype=label.dtype), example_weight * label),
     ):
-        if not math.isclose(w, 0.0):
+        if not math.isclose(w.item(), 0.0):
             yield (l, prediction, w)
 
 

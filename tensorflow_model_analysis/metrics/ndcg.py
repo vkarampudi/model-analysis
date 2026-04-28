@@ -204,7 +204,7 @@ class _NDCGCombiner(beam.CombineFn):
         # Ignore non-positive gains.
         if gains.max() <= 0:
             example_weight = 0.0
-        return (gains[np.argsort(predictions)[::-1]], float(example_weight))
+        return (gains[np.argsort(predictions)[::-1]], example_weight.item())
 
     def _calculate_dcg_at_k(self, k: int, sorted_values: List[float]) -> float:
         """Calculate the value of DCG@k.
