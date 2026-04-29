@@ -977,32 +977,41 @@ class ModelUtilTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCas
             self._makeExample(input_1=5.0, input_2=6.0),
         ]
 
-        with self.assertRaisesRegex(
-            (ValueError, RuntimeError),
-            "First dimension does not correspond with batch size.",
-        ):
-            from apache_beam.options.pipeline_options import PipelineOptions
+        import io
+        import sys
 
-            options = PipelineOptions(flags=["--no_save_main_session"])
-            with beam.Pipeline(options=options) as pipeline:
-                # pylint: disable=no-value-for-parameter
-                _ = (
-                    pipeline
-                    | "Create" >> beam.Create([e.SerializeToString() for e in examples])
-                    | "BatchExamples" >> tfx_io.BeamSource(batch_size=3)
-                    | "ToExtracts" >> beam.Map(_record_batch_to_extracts)
-                    | "ModelSignatures"
-                    >> beam.ParDo(
-                        model_util.ModelSignaturesDoFn(
-                            model_specs=model_specs,
-                            eval_shared_models=eval_shared_models,
-                            output_keypath=output_keypath,
-                            signature_names=signature_names,
-                            default_signature_names=None,
-                            prefer_dict_outputs=False,
+        old_stderr = sys.stderr
+        sys.stderr = io.StringIO()
+        try:
+            with self.assertRaisesRegex(
+                (ValueError, RuntimeError),
+                "First dimension does not correspond with batch size.",
+            ):
+                from apache_beam.options.pipeline_options import PipelineOptions
+
+                options = PipelineOptions(flags=["--no_save_main_session"])
+                with beam.Pipeline(options=options) as pipeline:
+                    # pylint: disable=no-value-for-parameter
+                    _ = (
+                        pipeline
+                        | "Create"
+                        >> beam.Create([e.SerializeToString() for e in examples])
+                        | "BatchExamples" >> tfx_io.BeamSource(batch_size=3)
+                        | "ToExtracts" >> beam.Map(_record_batch_to_extracts)
+                        | "ModelSignatures"
+                        >> beam.ParDo(
+                            model_util.ModelSignaturesDoFn(
+                                model_specs=model_specs,
+                                eval_shared_models=eval_shared_models,
+                                output_keypath=output_keypath,
+                                signature_names=signature_names,
+                                default_signature_names=None,
+                                prefer_dict_outputs=False,
+                            )
                         )
                     )
-                )
+        finally:
+            sys.stderr = old_stderr
 
     def testHasRubberStamp(self):
         # Model agnostic.

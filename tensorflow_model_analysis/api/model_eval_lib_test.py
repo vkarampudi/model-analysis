@@ -1386,6 +1386,7 @@ class EvaluateTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase
     def testLoadValidationResult(self):
         result = validation_result_pb2.ValidationResult(validation_ok=True)
         path = os.path.join(absltest.get_default_test_tmpdir(), "results.tfrecord")
+        tf.io.gfile.makedirs(os.path.dirname(path))
         with tf.io.TFRecordWriter(path) as writer:
             writer.write(result.SerializeToString())
         loaded_result = model_eval_lib.load_validation_result(path)
@@ -1396,6 +1397,7 @@ class EvaluateTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase
         path = os.path.join(
             absltest.get_default_test_tmpdir(), constants.VALIDATIONS_KEY
         )
+        tf.io.gfile.makedirs(os.path.dirname(path))
         with tf.io.TFRecordWriter(path) as writer:
             writer.write(result.SerializeToString())
         loaded_result = model_eval_lib.load_validation_result(os.path.dirname(path))
@@ -1405,6 +1407,7 @@ class EvaluateTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCase
         path = os.path.join(
             absltest.get_default_test_tmpdir(), constants.VALIDATIONS_KEY
         )
+        tf.io.gfile.makedirs(os.path.dirname(path))
         with tf.io.TFRecordWriter(path):
             pass
         with self.assertRaises(AssertionError):
