@@ -311,7 +311,7 @@ class _MultiClassConfusionMatrixCombiner(beam.CombineFn):
         if label.size > 1:
             actual_class_id = np.argmax(label)
         else:
-            actual_class_id = int(label)
+            actual_class_id = int(np.asarray(label).item())
         predicted_class_id = np.argmax(predictions)
         example_weight = np.asarray(example_weight).item()
         for threshold in self._thresholds:

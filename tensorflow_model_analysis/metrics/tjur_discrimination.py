@@ -291,8 +291,8 @@ class _TjurDiscriminationCombiner(beam.CombineFn):
             class_weights=self._class_weights,
             example_weighted=self._example_weighted,
         ):
-            label = float(label)
-            prediction = float(prediction)
+            label = float(np.asarray(label).item())
+            prediction = float(np.asarray(prediction).item())
             example_weight = np.asarray(example_weight).item()
             accumulator.total_negative_weighted_labels += (1.0 - label) * example_weight
             accumulator.total_positive_weighted_labels += label * example_weight

@@ -132,8 +132,8 @@ class _SquaredPearsonCorrelationCombiner(beam.CombineFn):
             example_weighted=self._example_weighted,
         ):
             example_weight = np.asarray(example_weight).item()
-            label = float(label)
-            prediction = float(prediction)
+            label = float(np.asarray(label).item())
+            prediction = float(np.asarray(prediction).item())
             accumulator.total_weighted_labels += example_weight * label
             accumulator.total_weighted_predictions += example_weight * prediction
             accumulator.total_weighted_squared_labels += example_weight * label**2

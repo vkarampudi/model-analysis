@@ -199,7 +199,7 @@ class Matrices(  # pytype: disable=signature-mismatch  # always-use-return-annot
         false_omission_rate = np.divide(
             fn,
             predicated_negatives,
-            out=np.zeros_like(predicated_negatives),
+            out=np.full_like(predicated_negatives, np.nan, dtype=np.float64),
             where=(predicated_negatives > 0),
         )
         confusion_matrix_at_thresholds_proto = result.confusion_matrix_at_thresholds
