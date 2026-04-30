@@ -22,14 +22,17 @@
     *   Standardized on safe scalar extraction by replacing `float(ndarray)` with `.item()` or `metric_util.safe_to_scalar` in aggregation, attributions, calibration, flip metrics, and NDCG modules to resolve `TypeError` in Beam pipelines.
     *   Fixed a batching bug in `flip_metrics.py` to correctly process all examples in a Beam batch.
     *   Implemented robust, warning-free division in AUC, PR AUC, and confusion matrix calculations using `np.divide` with `where` clauses to prevent `RuntimeWarning`.
+    *   Fixed `TypeError` in `poisson_bootstrap.py` by removing redundant size argument from `poisson(1, 1)` to return a scalar.
+    *   Implemented `kind='stable'` sort in `metric_util.top_k_indices` for deterministic tie-breaking.
 *   **Bug Fixes and Functional Corrections**:
     *   Fixed a critical regression in `metric_util.py` where `SubKey(k=k)` incorrectly selected the first prediction instead of the requested k-th largest prediction.
     *   Fixed `UnparsedFlagAccessError` in `ModelSignaturesDoFn` tests by removing direct `absl.flags` access in pickling-sensitive contexts.
     *   Removed obsolete `@unittest.expectedFailure` decorators from tests that are now passing in the stabilized environment.
     *   Fixed various indentation and syntax errors in utility tests.
     *   Improved virtual environment relocation strategy to resolve Bazel sandbox access issues for `numpy` and other C-extension headers.
-*   **Simplified Dependencies**:
-    *   Consolidated `apache-beam` dependency into a single non-conditional constraint (`>=2.53,<3`) for all supported Python versions.
+    *   Fixed `false_omission_rate` in `binary_confusion_matrices.py` to return NaN when undefined, resolving proto mismatches in `confusion_matrix_plot_test.py` and `score_distribution_plot_test.py`.
+    *   Fixed `NotFoundError` in `model_eval_lib_test.py` by ensuring temporary directories exist before writing files using `tf.io.gfile.makedirs`.
+    *   Added missing `numpy` imports in Beam-based modules to fix `NameError` regressions.
 
 ## Breaking Changes
 *   Python 3.9 is no longer supported. The minimum supported Python version is now 3.10.
