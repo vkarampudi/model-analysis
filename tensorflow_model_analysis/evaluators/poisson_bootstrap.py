@@ -44,7 +44,7 @@ class _BootstrapCombineFn(beam_util.DelegatingCombineFn):
     def add_input(
         self, accumulator: _AccumulatorType, element: Any
     ) -> _AccumulatorType:
-        for sampled_element in [element] * int(self._random_state.poisson(1, 1)):
+        for sampled_element in [element] * self._random_state.poisson(1):
             accumulator = self._combine_fn.add_input(accumulator, sampled_element)
         return accumulator
 

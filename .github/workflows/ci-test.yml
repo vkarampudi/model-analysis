@@ -10,13 +10,16 @@ on:
       - 'docs/**'
   workflow_dispatch:
 
+env:
+  USE_BAZEL_VERSION: 7.7.0
+
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11']
+        python-version: ['3.10', '3.11', '3.12', '3.13']
 
     steps:
     - name: Checkout repository
@@ -30,11 +33,19 @@ jobs:
         cache-dependency-path: |
           setup.py
 
+    - name: Remove buggy sitecustomize
+      run: |
+        sudo find /etc/ -name "*sitecustomize*" -print -delete || true
+        sudo find /usr/ -name "*sitecustomize*" -print -delete || true
+        sudo find /opt/ -name "*sitecustomize*" -print -delete || true
+        sudo find /home/runner/ -name "*sitecustomize*" -print -delete || true
+
     - name: Install dependencies
       run: |
         sudo apt update
         sudo apt install -y protobuf-compiler
-        pip install .
+        pip install --upgrade pip setuptools wheel numpy pyarrow
+        pip install --no-build-isolation .
 
     - name: Run unit tests
       shell: bash

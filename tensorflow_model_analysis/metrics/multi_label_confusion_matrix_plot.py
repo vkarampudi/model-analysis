@@ -16,6 +16,7 @@
 from typing import Dict, Iterable, List, NamedTuple, Optional
 
 import apache_beam as beam
+import numpy as np
 
 from tensorflow_model_analysis.metrics import metric_types, metric_util
 from tensorflow_model_analysis.proto import config_pb2, metrics_for_slice_pb2
@@ -216,7 +217,7 @@ class _MultiLabelConfusionMatrixPlotCombiner(beam.CombineFn):
             or labels.shape[-1] != predictions.shape[-1]
         ):
             labels = metric_util.one_hot(labels, predictions)
-        example_weight = float(example_weight)
+        example_weight = np.asarray(example_weight).item()
         for threshold in self._thresholds:
             if threshold not in accumulator:
                 accumulator[threshold] = {}

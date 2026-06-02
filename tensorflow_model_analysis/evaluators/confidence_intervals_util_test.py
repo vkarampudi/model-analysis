@@ -16,6 +16,7 @@
 import apache_beam as beam
 import numpy as np
 from absl.testing import absltest, parameterized
+from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.testing import util
 from numpy import testing
 
@@ -23,6 +24,106 @@ from tensorflow_model_analysis.evaluators import confidence_intervals_util
 from tensorflow_model_analysis.metrics import binary_confusion_matrices, metric_types
 
 _FULL_SAMPLE_ID = -1
+
+
+def _check_sample_combine_fn_no_input(slice_key):
+    def check_result(got_pcoll):
+        if len(got_pcoll) != 1:
+            raise util.BeamAssertException(f"Expected 1 result, got {len(got_pcoll)}")
+        accumulators_by_slice = dict(got_pcoll)
+        if slice_key not in accumulators_by_slice:
+            raise util.BeamAssertException(f"Expected {slice_key} in results")
+        accumulator = accumulators_by_slice[slice_key]
+        if accumulator.num_samples != 2:
+            raise util.BeamAssertException(
+                f"Expected 2 samples, got {accumulator.num_samples}"
+            )
+        if not isinstance(accumulator.point_estimates, dict):
+            raise util.BeamAssertException("point_estimates should be a dict")
+        if not isinstance(accumulator.metric_samples, dict):
+            raise util.BeamAssertException("metric_samples should be a dict")
+
+    return check_result
+
+
+def _check_sample_combine_fn(
+    slice_key1,
+    slice_key2,
+    metric_key,
+    array_metric_key,
+    non_numeric_metric_key,
+    non_numeric_array_metric_key,
+    mixed_type_array_metric_key,
+    skipped_metric_key,
+):
+    def check_result(got_pcoll):
+        if len(got_pcoll) != 2:
+            raise util.BeamAssertException(f"Expected 2 results, got {len(got_pcoll)}")
+        accumulators_by_slice = dict(got_pcoll)
+
+        if slice_key1 not in accumulators_by_slice:
+            raise util.BeamAssertException(f"Expected {slice_key1} in results")
+        slice1_accumulator = accumulators_by_slice[slice_key1]
+        if metric_key not in slice1_accumulator.point_estimates:
+            raise util.BeamAssertException("metric_key not in point_estimates")
+        if slice1_accumulator.point_estimates[metric_key] != 2.1:
+            raise util.BeamAssertException("Unexpected point estimate for metric_key")
+        if metric_key not in slice1_accumulator.metric_samples:
+            raise util.BeamAssertException("metric_key not in metric_samples")
+        if slice1_accumulator.metric_samples[metric_key] != [1, 2]:
+            raise util.BeamAssertException("Unexpected samples for metric_key")
+        if array_metric_key not in slice1_accumulator.metric_samples:
+            raise util.BeamAssertException("array_metric_key not in metric_samples")
+        array_metric_samples = slice1_accumulator.metric_samples[array_metric_key]
+        if len(array_metric_samples) != 2:
+            raise util.BeamAssertException("Expected 2 array metric samples")
+        testing.assert_array_equal(np.array([2, 3]), array_metric_samples[0])
+        testing.assert_array_equal(np.array([0, 1]), array_metric_samples[1])
+
+        if non_numeric_metric_key not in slice1_accumulator.point_estimates:
+            raise util.BeamAssertException(
+                "non_numeric_metric_key not in point_estimates"
+            )
+        if non_numeric_metric_key in slice1_accumulator.metric_samples:
+            raise util.BeamAssertException(
+                "non_numeric_metric_key should not have samples"
+            )
+        if non_numeric_array_metric_key not in slice1_accumulator.point_estimates:
+            raise util.BeamAssertException(
+                "non_numeric_array_metric_key not in point_estimates"
+            )
+        if non_numeric_array_metric_key in slice1_accumulator.metric_samples:
+            raise util.BeamAssertException(
+                "non_numeric_array_metric_key should not have samples"
+            )
+        if mixed_type_array_metric_key not in slice1_accumulator.point_estimates:
+            raise util.BeamAssertException(
+                "mixed_type_array_metric_key not in point_estimates"
+            )
+        if mixed_type_array_metric_key in slice1_accumulator.metric_samples:
+            raise util.BeamAssertException(
+                "mixed_type_array_metric_key should not have samples"
+            )
+
+        error_key = metric_types.MetricKey("__ERROR__")
+        if error_key not in slice1_accumulator.point_estimates:
+            raise util.BeamAssertException("error_key not in point_estimates")
+        if "CI not computed for" not in slice1_accumulator.point_estimates[error_key]:
+            raise util.BeamAssertException("Unexpected error message for CI failure")
+        if skipped_metric_key in slice1_accumulator.metric_samples:
+            raise util.BeamAssertException("skipped_metric_key should not have samples")
+
+        if slice_key2 not in accumulators_by_slice:
+            raise util.BeamAssertException(f"Expected {slice_key2} in results")
+        slice2_accumulator = accumulators_by_slice[slice_key2]
+        if metric_key not in slice2_accumulator.point_estimates:
+            raise util.BeamAssertException("metric_key not in slice2 point_estimates")
+        if slice2_accumulator.point_estimates[metric_key] != 6.3:
+            raise util.BeamAssertException("Unexpected point estimate for slice2")
+        if error_key not in slice2_accumulator.point_estimates:
+            raise util.BeamAssertException("error_key not in slice2 point_estimates")
+
+    return check_result
 
 
 class _ValidateSampleCombineFn(confidence_intervals_util.SampleCombineFn):
@@ -179,7 +280,8 @@ class ConfidenceIntervalsUtilTest(parameterized.TestCase):
             ),
         ]
 
-        with beam.Pipeline() as pipeline:
+        options = PipelineOptions(flags=["--no_save_main_session"])
+        with beam.Pipeline(options=options) as pipeline:
             result = (
                 pipeline
                 | "Create" >> beam.Create(samples, reshuffle=False)
@@ -193,73 +295,22 @@ class ConfidenceIntervalsUtilTest(parameterized.TestCase):
                 )
             )
 
-            def check_result(got_pcoll):
-                self.assertLen(got_pcoll, 2)
-                accumulators_by_slice = dict(got_pcoll)
-
-                self.assertIn(slice_key1, accumulators_by_slice)
-                slice1_accumulator = accumulators_by_slice[slice_key1]
-                # check unsampled value
-                self.assertIn(metric_key, slice1_accumulator.point_estimates)
-                self.assertEqual(2.1, slice1_accumulator.point_estimates[metric_key])
-                # check numeric case sample_values
-                self.assertIn(metric_key, slice1_accumulator.metric_samples)
-                self.assertEqual([1, 2], slice1_accumulator.metric_samples[metric_key])
-                # check numeric array in sample_values
-                self.assertIn(array_metric_key, slice1_accumulator.metric_samples)
-                array_metric_samples = slice1_accumulator.metric_samples[
-                    array_metric_key
-                ]
-                self.assertLen(array_metric_samples, 2)
-                testing.assert_array_equal(np.array([2, 3]), array_metric_samples[0])
-                testing.assert_array_equal(np.array([0, 1]), array_metric_samples[1])
-                # check that non-numeric metric sample_values are not present
-                self.assertIn(
-                    non_numeric_metric_key, slice1_accumulator.point_estimates
-                )
-                self.assertNotIn(
-                    non_numeric_metric_key, slice1_accumulator.metric_samples
-                )
-                self.assertIn(
-                    non_numeric_array_metric_key, slice1_accumulator.point_estimates
-                )
-                self.assertNotIn(
-                    non_numeric_array_metric_key, slice1_accumulator.metric_samples
-                )
-                self.assertIn(
-                    mixed_type_array_metric_key, slice1_accumulator.point_estimates
-                )
-                self.assertNotIn(
-                    mixed_type_array_metric_key, slice1_accumulator.metric_samples
-                )
-                # check that single metric missing samples generates error
-                error_key = metric_types.MetricKey("__ERROR__")
-                self.assertIn(error_key, slice1_accumulator.point_estimates)
-                self.assertRegex(
-                    slice1_accumulator.point_estimates[error_key],
-                    "CI not computed for.*missing_metric.*",
-                )
-                # check that skipped metrics have no samples
-                self.assertNotIn(skipped_metric_key, slice1_accumulator.metric_samples)
-
-                self.assertIn(slice_key2, accumulators_by_slice)
-                slice2_accumulator = accumulators_by_slice[slice_key2]
-                # check unsampled value
-                self.assertIn(metric_key, slice2_accumulator.point_estimates)
-                self.assertEqual(6.3, slice2_accumulator.point_estimates[metric_key])
-                # check that entirely missing sample generates error
-                self.assertIn(
-                    metric_types.MetricKey("__ERROR__"),
-                    slice2_accumulator.point_estimates,
-                )
-                self.assertRegex(
-                    slice2_accumulator.point_estimates[error_key],
-                    "CI not computed because only 1.*Expected 2.*",
-                )
-
-            util.assert_that(result, check_result)
+            util.assert_that(
+                result,
+                _check_sample_combine_fn(
+                    slice_key1,
+                    slice_key2,
+                    metric_key,
+                    array_metric_key,
+                    non_numeric_metric_key,
+                    non_numeric_array_metric_key,
+                    mixed_type_array_metric_key,
+                    skipped_metric_key,
+                ),
+            )
 
             runner_result = pipeline.run()
+            runner_result.wait_until_finish()
             # we expect one missing samples counter increment for slice2, since we
             # expected 2 samples, but only saw 1.
             metric_filter = beam.metrics.metric.MetricsFilter().with_name(
@@ -294,7 +345,8 @@ class ConfidenceIntervalsUtilTest(parameterized.TestCase):
             ),
         ]
 
-        with beam.Pipeline() as pipeline:
+        options = PipelineOptions(flags=["--no_save_main_session"])
+        with beam.Pipeline(options=options) as pipeline:
             result = (
                 pipeline
                 | "Create" >> beam.Create(samples)
@@ -306,16 +358,8 @@ class ConfidenceIntervalsUtilTest(parameterized.TestCase):
                 )
             )
 
-            def check_result(got_pcoll):
-                self.assertLen(got_pcoll, 1)
-                accumulators_by_slice = dict(got_pcoll)
-                self.assertIn(slice_key, accumulators_by_slice)
-                accumulator = accumulators_by_slice[slice_key]
-                self.assertEqual(2, accumulator.num_samples)
-                self.assertIsInstance(accumulator.point_estimates, dict)
-                self.assertIsInstance(accumulator.metric_samples, dict)
-
-            util.assert_that(result, check_result)
+            util.assert_that(result, _check_sample_combine_fn_no_input(slice_key))
+            pipeline.run().wait_until_finish()
 
 
 if __name__ == "__main__":

@@ -478,7 +478,7 @@ class _MeanAbsolutePercentageErrorCombiner(_MeanRegressionErrorCombiner):
         # The np.item method makes sure the result is a one element numpy array and
         # returns the single element as a float.
         # The error also requires the label to be a one element numpy array.
-        if label.size == 0 or label.item() == 0:
+        if label.size == 0 or np.asarray(label).item() == 0:
             return float("nan")
         return 100 * metric_util.safe_to_scalar(
             np.absolute((label - prediction) / label)

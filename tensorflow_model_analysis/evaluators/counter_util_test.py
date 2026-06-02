@@ -23,14 +23,15 @@ from tensorflow_model_analysis.proto import config_pb2
 
 class CounterUtilTest(tf.test.TestCase):
     def testSliceSpecBeamCounter(self):
-        with beam.Pipeline() as pipeline:
-            _ = (
-                pipeline
-                | beam.Create([((("slice_key", "first_slice"),), 2)])
-                | counter_util.IncrementSliceSpecCounters()
-            )
+        pipeline = beam.Pipeline()
+        _ = (
+            pipeline
+            | beam.Create([((("slice_key", "first_slice"),), 2)])
+            | counter_util.IncrementSliceSpecCounters()
+        )
 
         result = pipeline.run()
+        result.wait_until_finish()
 
         slice_spec_filter = (
             beam.metrics.metric.MetricsFilter()
@@ -43,16 +44,17 @@ class CounterUtilTest(tf.test.TestCase):
         self.assertEqual(slice_count, 1)
 
     def testMetricsSpecBeamCounter(self):
-        with beam.Pipeline() as pipeline:
-            metrics_spec = config_pb2.MetricsSpec(
-                metrics=[config_pb2.MetricConfig(class_name="FairnessIndicators")]
-            )
-            model_types = set(["tf_js", "tf_keras"])
-            _ = pipeline | counter_util.IncrementMetricsSpecsCounters(
-                [metrics_spec], model_types
-            )
+        pipeline = beam.Pipeline()
+        metrics_spec = config_pb2.MetricsSpec(
+            metrics=[config_pb2.MetricConfig(class_name="FairnessIndicators")]
+        )
+        model_types = set(["tf_js", "tf_keras"])
+        _ = pipeline | counter_util.IncrementMetricsSpecsCounters(
+            [metrics_spec], model_types
+        )
 
         result = pipeline.run()
+        result.wait_until_finish()
 
         for model_type in model_types:
             metric_filter = (

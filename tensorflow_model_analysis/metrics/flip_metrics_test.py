@@ -16,6 +16,7 @@
 import copy
 
 import apache_beam as beam
+import numpy as np
 from absl.testing import absltest, parameterized
 from apache_beam.testing import util
 from google.protobuf import text_format
@@ -330,6 +331,81 @@ class FlipRateMetricsTest(parameterized.TestCase):
                     self.assertIsInstance(got_metrics[p2p_fr_key], float)
                     self.assertAlmostEqual(got_metrics[p2p_fr_key], 4 / 10)
 
+                except AssertionError as err:
+                    raise util.BeamAssertException(err)
+
+            util.assert_that(result, check_result, label="result")
+
+    def testFlipRatesWithNumpyArrays(self):
+        eval_config = text_format.Parse(
+            """
+        model_specs {
+          name: "baseline"
+          is_baseline: true
+        }
+        model_specs {
+          name: "candidate"
+        }
+        """,
+            config_pb2.EvalConfig(),
+        )
+        baseline_model_name = "baseline"
+        candidate_model_name = "candidate"
+
+        metric = flip_metrics.SymmetricFlipRate(threshold=0.5)
+        computations = metric.computations(
+            eval_config=eval_config,
+            model_names=["baseline", "candidate"],
+            output_names=[""],
+            example_weighted=True,
+        )
+        flip_counts = computations[0]
+        flip_rate = computations[1]
+
+        # Use 1-element numpy arrays for predictions to test scalar conversion.
+        examples = [
+            {
+                constants.LABELS_KEY: np.array([0]),
+                constants.PREDICTIONS_KEY: {
+                    baseline_model_name: np.array([0.1]),
+                    candidate_model_name: np.array([0.9]),
+                },
+                constants.EXAMPLE_WEIGHTS_KEY: np.array([1]),
+            },
+            {
+                constants.LABELS_KEY: np.array([0]),
+                constants.PREDICTIONS_KEY: {
+                    baseline_model_name: np.array([0.9]),
+                    candidate_model_name: np.array([0.1]),
+                },
+                constants.EXAMPLE_WEIGHTS_KEY: np.array([2]),
+            },
+        ]
+
+        with beam.Pipeline() as pipeline:
+            result = (
+                pipeline
+                | "Create" >> beam.Create(examples)
+                | "Process" >> beam.Map(metric_util.to_standard_metric_inputs)
+                | "AddSlice" >> beam.Map(lambda x: ((), x))
+                | "ComputeFlipCounts" >> beam.CombinePerKey(flip_counts.combiner)
+                | "ComputeFlipRates"
+                >> beam.Map(lambda x: (x[0], flip_rate.result(x[1])))
+            )
+
+            def check_result(got):
+                try:
+                    self.assertLen(got, 1)
+                    got_slice_key, got_metrics = got[0]
+                    metric_key = metric_types.MetricKey(
+                        name=flip_metrics.SYMMETRIC_FLIP_RATE_NAME,
+                        model_name=candidate_model_name,
+                        output_name="",
+                        example_weighted=True,
+                        is_diff=True,
+                    )
+                    self.assertIn(metric_key, got_metrics)
+                    self.assertAlmostEqual(got_metrics[metric_key], 1.0)
                 except AssertionError as err:
                     raise util.BeamAssertException(err)
 

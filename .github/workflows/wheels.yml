@@ -6,6 +6,9 @@ on:
   release:
     types: [published]
 
+env:
+  USE_BAZEL_VERSION: 7.7.0
+
 jobs:
   build_wheels:
     name: Build wheels
@@ -22,12 +25,21 @@ jobs:
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
 
+    - name: Remove buggy sitecustomize
+      run: |
+        sudo find /etc/ -name "*sitecustomize*" -print -delete || true
+        sudo find /usr/ -name "*sitecustomize*" -print -delete || true
+        sudo find /opt/ -name "*sitecustomize*" -print -delete || true
+        sudo find /home/runner/ -name "*sitecustomize*" -print -delete || true
+
     - name: install python dependencies
-      run: pip install --upgrade pip build twine
+      run: |
+        pip install --upgrade pip setuptools wheel numpy pyarrow build twine
+        pip install --no-build-isolation .
 
     - name: build sdist
       run: |
-        python -m build --sdist --wheel -o wheelhouse
+        python -m build --sdist --wheel --no-isolation -o wheelhouse
 
     - name: List and check sdist
       run: |

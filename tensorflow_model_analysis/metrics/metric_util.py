@@ -228,7 +228,7 @@ def to_scalar(
             f'"{tensor_name}" should have exactly 1 value, but found '
             f"{tensor.size} instead: values={tensor}"
         )
-    return tensor.item()
+    return np.asarray(tensor).item()
 
 
 def safe_to_scalar(arr: Any) -> Any:
@@ -242,7 +242,7 @@ def safe_to_scalar(arr: Any) -> Any:
         if arr.size == 0:
             return 0.0
         elif arr.size == 1:
-            return arr.item()
+            return np.asarray(arr).item()
         else:
             raise ValueError("Array should have exactly 1 value to a Python scalar")
 
@@ -364,28 +364,23 @@ def top_k_indices(
 
     if len(scores.shape) == 1:
         # 1D data
-        indices = np.argpartition(scores, -top_k)[-top_k:]
-        if sort:
-            indices = indices[np.argsort(-scores[indices])]
+        # To ensure deterministic behavior in the presence of ties, we use argsort
+        # with kind='stable'.
+        indices = np.argsort(-scores, kind="stable")[:top_k]
+        if not sort:
+            indices.sort()
         return indices
     elif len(scores.shape) == 2:
         # 2D data
-        indices = np.argpartition(scores, -top_k, axis=-1)[:, -top_k:]
-        # The above creates an n x top_k matrix where each row in indices matches
-        # the corresponding row in scores. For example:
-        #   [
-        #      [<row1_top_k_index_1>, <row_1_top_k_index_2>, ...],
-        #      [<row2_top_k_index_1>, <row_2_top_k_index_2>, ...],
-        #      ...
-        #   ]
-        # However numpy indexing wants the index to be be a 2-tuple of where the
-        # first tuple value contains the row indices (repeated top k times for each
-        # row) and the second tuple value contains the column values.
-        #   (row1, row1, ..., row2, ...), (row1_top_k_index1, row1_top_index_2,...)
-        if sort:
-            for i in range(indices.shape[0]):
-                indices[i] = indices[i][np.argsort(-scores[i][indices[i]])]
-        return np.arange(indices.shape[0]).repeat(top_k), indices.flatten()
+        # To ensure deterministic behavior in the presence of ties, we use argsort
+        # with kind='stable' along the last axis.
+        indices = np.argsort(-scores, axis=-1, kind="stable")[:, :top_k]
+        if not sort:
+            indices.sort(axis=-1)
+        # For 2D data, TFMA expects a return value that can be used to index the
+        # array directly. This is a tuple of (row_indices, col_indices).
+        num_rows = scores.shape[0]
+        return np.arange(num_rows).repeat(top_k), indices.flatten()
     else:
         raise NotImplementedError(
             f"top_k not supported for shapes > 2: scores = {scores}"
@@ -662,7 +657,7 @@ def to_label_prediction_example_weight(
         example_weight = util.to_numpy(example_weight)
         if require_single_example_weight and example_weight.size > 1:
             example_weight = example_weight.flatten()
-            if not np.all(example_weight == example_weight[0]):
+            if not np.allclose(example_weight, example_weight[0]):
                 raise ValueError(
                     "if example_weight size > 0, the values must all be the same: "
                     f"example_weight={example_weight}\n\n"
@@ -672,12 +667,15 @@ def to_label_prediction_example_weight(
 
         if sub_key is not None and label is not None and prediction is not None:
             if sub_key.k is not None:
-                indices = top_k_indices(sub_key.k, prediction)
+                indices = top_k_indices(sub_key.k, prediction, sort=True)
                 if len(prediction.shape) == 1:
-                    indices = indices[0]  # 1D
+                    indices = indices[sub_key.k - 1]  # 1D
                 else:
                     # 2D, take kth values
-                    indices = (indices[0][0 :: sub_key.k], indices[1][0 :: sub_key.k])
+                    indices = (
+                        indices[0][sub_key.k - 1 :: sub_key.k],
+                        indices[1][sub_key.k - 1 :: sub_key.k],
+                    )
                 if label.shape != prediction.shape:
                     label = one_hot(label, prediction)
                 label = select_indices(label, indices)
@@ -715,7 +713,7 @@ def to_label_prediction_example_weight(
         if flatten:
             if example_weight.size == 1:
                 example_weight = np.array(
-                    [float(example_weight) for i in range(flatten_size)]
+                    [np.asarray(example_weight).item() for i in range(flatten_size)]
                 )
             elif example_weight.size != flatten_size:
                 raise ValueError(
@@ -815,7 +813,7 @@ def _yield_fractional_labels(
       ValueError: If labels are not within [0, 1].
     """
     # Verify that labels are also within [0, 1]
-    if not within_interval(float(label), 0.0, 1.0):
+    if not within_interval(np.asarray(label).item(), 0.0, 1.0):
         raise ValueError(
             f"label must be within [0, 1]: label={label}, prediction={prediction}, "
             f"example_weight={example_weight}"
@@ -824,7 +822,7 @@ def _yield_fractional_labels(
         (np.array([0], dtype=label.dtype), example_weight * (1 - label)),
         (np.array([1], dtype=label.dtype), example_weight * label),
     ):
-        if not math.isclose(w, 0.0):
+        if not math.isclose(np.asarray(w).item(), 0.0):
             yield (l, prediction, w)
 
 

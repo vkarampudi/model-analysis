@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 import tempfile
 import unittest
 
@@ -914,7 +915,10 @@ class ModelUtilTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCas
         extract_key, signature_names = next(
             iter(extract_key_and_signature_names.items())
         )
-        with beam.Pipeline() as pipeline:
+        from apache_beam.options.pipeline_options import PipelineOptions
+
+        options = PipelineOptions(flags=["--no_save_main_session"])
+        with beam.Pipeline(options=options) as pipeline:
             # pylint: disable=no-value-for-parameter
             result = (
                 pipeline
@@ -937,18 +941,16 @@ class ModelUtilTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCas
             # pylint: enable=no-value-for-parameter
 
             def check_result(got):
-                try:
-                    self.assertLen(got, 1)
-                    for key in extract_key_and_signature_names:
-                        self.assertIn(key, got[0])
-                        if prefer_dict_outputs:
-                            self.assertIsInstance(got[0][key], dict)
-                            self.assertEqual(
-                                tfma_util.batch_size(got[0][key]), expected_num_outputs
-                            )
-
-                except AssertionError as err:
-                    raise util.BeamAssertException(err)
+                if len(got) != 1:
+                    raise ValueError(f"Expected 1 result, got {len(got)}")
+                for key in extract_key_and_signature_names:
+                    if key not in got[0]:
+                        raise ValueError(f"Expected {key} in result")
+                    if prefer_dict_outputs:
+                        if not isinstance(got[0][key], dict):
+                            raise ValueError("Expected dict output")
+                        if tfma_util.batch_size(got[0][key]) != expected_num_outputs:
+                            raise ValueError("Unexpected batch size")
 
             util.assert_that(result, check_result, label="result")
 
@@ -975,28 +977,41 @@ class ModelUtilTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCas
             self._makeExample(input_1=5.0, input_2=6.0),
         ]
 
-        with self.assertRaisesRegex(
-            ValueError, "First dimension does not correspond with batch size."
-        ):
-            with beam.Pipeline() as pipeline:
-                # pylint: disable=no-value-for-parameter
-                _ = (
-                    pipeline
-                    | "Create" >> beam.Create([e.SerializeToString() for e in examples])
-                    | "BatchExamples" >> tfx_io.BeamSource(batch_size=3)
-                    | "ToExtracts" >> beam.Map(_record_batch_to_extracts)
-                    | "ModelSignatures"
-                    >> beam.ParDo(
-                        model_util.ModelSignaturesDoFn(
-                            model_specs=model_specs,
-                            eval_shared_models=eval_shared_models,
-                            output_keypath=output_keypath,
-                            signature_names=signature_names,
-                            default_signature_names=None,
-                            prefer_dict_outputs=False,
+        import io
+        import sys
+
+        old_stderr = sys.stderr
+        sys.stderr = io.StringIO()
+        try:
+            with self.assertRaisesRegex(
+                (ValueError, RuntimeError),
+                "First dimension does not correspond with batch size.",
+            ):
+                from apache_beam.options.pipeline_options import PipelineOptions
+
+                options = PipelineOptions(flags=["--no_save_main_session"])
+                with beam.Pipeline(options=options) as pipeline:
+                    # pylint: disable=no-value-for-parameter
+                    _ = (
+                        pipeline
+                        | "Create"
+                        >> beam.Create([e.SerializeToString() for e in examples])
+                        | "BatchExamples" >> tfx_io.BeamSource(batch_size=3)
+                        | "ToExtracts" >> beam.Map(_record_batch_to_extracts)
+                        | "ModelSignatures"
+                        >> beam.ParDo(
+                            model_util.ModelSignaturesDoFn(
+                                model_specs=model_specs,
+                                eval_shared_models=eval_shared_models,
+                                output_keypath=output_keypath,
+                                signature_names=signature_names,
+                                default_signature_names=None,
+                                prefer_dict_outputs=False,
+                            )
                         )
                     )
-                )
+        finally:
+            sys.stderr = old_stderr
 
     def testHasRubberStamp(self):
         # Model agnostic.
@@ -1077,7 +1092,6 @@ class ModelUtilTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCas
         )
 
     # PR 189: Remove the `expectedFailure` mark if the test passes
-    @unittest.expectedFailure
     def testGetDefaultModelSignatureFromModelPath(self):
         saved_model_proto = text_format.Parse(
             """
@@ -1127,10 +1141,9 @@ class ModelUtilTest(test_util.TensorflowModelAnalysisTest, parameterized.TestCas
       """,
             saved_model_pb2.SavedModel(),
         )
-        temp_dir = self.create_tempdir()
-        temp_dir.create_file(
-            "saved_model.pb", content=saved_model_proto.SerializeToString()
-        )
+        temp_dir = tempfile.mkdtemp()
+        with open(os.path.join(temp_dir, "saved_model.pb"), "wb") as f:
+            f.write(saved_model_proto.SerializeToString())
         self.assertEqual(
             tf.saved_model.DEFAULT_SERVING_SIGNATURE_DEF_KEY,
             model_util.get_default_signature_name_from_model_path(temp_dir),

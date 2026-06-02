@@ -302,7 +302,9 @@ class _TotalAttributionsCombiner(beam.CombineFn):
         ):
             if len(a) != 1:
                 raise ValueError(f"Attributions have different array sizes {a} != {b}")
-            a[0] += abs(float(b)) if self._absolute else float(b)
+            a[0] += (
+                abs(np.asarray(b).item()) if self._absolute else np.asarray(b).item()
+            )
         else:
             if len(a) != len(b):
                 raise ValueError(f"Attributions have different array sizes {a} != {b}")
@@ -339,7 +341,7 @@ class _TotalAttributionsCombiner(beam.CombineFn):
                 flatten=False,
             )
         )
-        example_weight = float(example_weight)
+        example_weight = np.asarray(example_weight).item()
         for k, v in attributions.items():
             v = util.to_numpy(v)
             if self._key.sub_key is not None:

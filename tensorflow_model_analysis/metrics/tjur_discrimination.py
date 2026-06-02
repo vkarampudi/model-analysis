@@ -20,6 +20,7 @@ designed for class imbalance problems.
 from typing import Any, Dict, Iterable, Optional
 
 import apache_beam as beam
+import numpy as np
 
 from tensorflow_model_analysis.metrics import metric_types, metric_util
 from tensorflow_model_analysis.proto import config_pb2
@@ -290,9 +291,9 @@ class _TjurDiscriminationCombiner(beam.CombineFn):
             class_weights=self._class_weights,
             example_weighted=self._example_weighted,
         ):
-            label = float(label)
-            prediction = float(prediction)
-            example_weight = float(example_weight)
+            label = float(np.asarray(label).item())
+            prediction = float(np.asarray(prediction).item())
+            example_weight = np.asarray(example_weight).item()
             accumulator.total_negative_weighted_labels += (1.0 - label) * example_weight
             accumulator.total_positive_weighted_labels += label * example_weight
             accumulator.total_negative_weighted_predictions += (
