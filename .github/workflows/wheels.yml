@@ -34,12 +34,12 @@ jobs:
 
     - name: install python dependencies
       run: |
-        pip install --upgrade pip setuptools wheel numpy pyarrow build twine
-        pip install --no-build-isolation .
+        pip install --upgrade pip build twine
+        pip install .
 
     - name: build sdist
       run: |
-        python -m build --sdist --wheel --no-isolation -o wheelhouse
+        python -m build --sdist --wheel -o wheelhouse
 
     - name: List and check sdist
       run: |
@@ -74,7 +74,7 @@ jobs:
           ls -lAs wheels/
 
       - name: Upload to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1.9
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
           packages_dir: wheels/
