@@ -34,7 +34,7 @@ jobs:
 
     - name: install python dependencies
       run: |
-        pip install --upgrade pip setuptools wheel numpy pyarrow build twine
+        pip install --upgrade pip "setuptools<70" wheel numpy pyarrow build twine
         pip install --no-build-isolation .
 
     - name: build sdist
@@ -74,7 +74,7 @@ jobs:
           ls -lAs wheels/
 
       - name: Upload to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1.9
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
           packages_dir: wheels/
