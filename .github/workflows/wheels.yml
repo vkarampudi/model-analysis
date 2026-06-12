@@ -46,11 +46,11 @@ jobs:
         ls -lh wheelhouse/
         twine check wheelhouse/*
 
-    - name: Upload sdist
+    - name: Upload distributions
       uses: actions/upload-artifact@v4
       with:
         name: wheels
-        path: ./wheelhouse/*.tar.gz
+        path: ./wheelhouse/*
 
   upload_to_pypi:
     name: Upload to PyPI
